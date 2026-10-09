@@ -128,7 +128,7 @@ export function App(){
    if (!persistent.settings?.initialized) {
      persistent.saveSettings?.({ ...persistent.settings, initialized: true, initializedAt: Date.now() });
    }
-   void reloadSources(undefined, { background: true });
+   // 启动阶段不发起任何网络请求，保持 100% 本地离线即时启动
  }, []);
 
  const liveSourcesCount = (persistent.sources || []).filter(s => s.sourceType === 'live' && s.enabled !== false).length;

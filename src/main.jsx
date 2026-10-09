@@ -3,13 +3,12 @@ import { createRoot } from 'react-dom/client';
 import './app.css';
 import { AppRoot } from './App.jsx';
 
-const rootElement = document.getElementById('root');
-
 function renderBootError(error) {
   const message = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : '';
-  if (!rootElement) return;
-  rootElement.innerHTML = `
+  const root = document.getElementById('root') || document.body;
+  if (!root) return;
+  root.innerHTML = `
     <main style="box-sizing:border-box;min-height:100vh;padding:32px;background:#0b0d12;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center">
       <section style="width:min(720px,100%);border:1px solid #343944;border-radius:16px;padding:24px;background:#151821">
         <h1 style="margin:0 0 12px;font-size:22px">应用启动失败</h1>
@@ -37,12 +36,26 @@ window.addEventListener('unhandledrejection', (event) => {
   renderBootError(event.reason);
 });
 
-if (!rootElement) {
-  throw new Error('ROOT_ELEMENT_NOT_FOUND');
+let isMounted = false;
+
+function boot() {
+  if (isMounted) return;
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    if (document.readyState === 'loading') return;
+    setTimeout(boot, 16);
+    return;
+  }
+  isMounted = true;
+  try {
+    createRoot(rootElement).render(<AppRoot />);
+  } catch (error) {
+    renderBootError(error);
+  }
 }
 
-try {
-  createRoot(rootElement).render(<AppRoot />);
-} catch (error) {
-  renderBootError(error);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot, { once: true });
+} else {
+  boot();
 }

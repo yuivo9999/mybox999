@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan to eliminate APK black-screen on startup by converting dynamic module imports to direct synchronous imports, injecting an instant branded skeleton screen in index.html, optimizing Android WebView settings, and enhancing mobile gesture controls and safe-area full-screen layouts.",
-  "updatedAt":  "2026-10-09T20:59:17.770782622Z",
+  "summary":  "Implementation plan to fix the skeleton screen hang and enforce 100% offline-first APP startup (zero network calls on launch, DOM-ready guaranteed mount, and network activity strictly deferred to user-initiated source selection and refresh).",
+  "updatedAt":  "2026-10-09T21:20:39.038968113Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

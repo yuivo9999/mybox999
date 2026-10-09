@@ -1,6 +1,7 @@
 // User typography catalog
 
 export const FONT_CATALOG = [
+  { id:'system', name:'系统默认', alias:'System Default', style:'跟随系统', source:'本地', cssUrl: null, family:'Inter,ui-sans-serif,system-ui,-apple-system,sans-serif', license:'System' },
   { id:'noto-sans-sc', name:'思源黑体', alias:'Noto Sans SC', style:'现代无衬线', source:'Google Fonts', cssUrl:'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap', family:'Noto Sans SC', license:'OFL-1.1' },
   { id:'noto-serif-sc', name:'思源宋体', alias:'Noto Serif SC', style:'现代宋体', source:'Google Fonts', cssUrl:'https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap', family:'Noto Serif SC', license:'OFL-1.1' },
   { id:'lxgw-wenkai', name:'霞鹜文楷', alias:'LXGW WenKai', style:'楷体 / 人文', source:'ZeoSeven FontsAPI', cssUrl:'https://fontsapi.zeoseven.com/292/main/result.css', family:'LXGW WenKai', license:'OFL-1.1' },
@@ -21,7 +22,7 @@ export const FONT_CATALOG = [
   { id:'chiron-goround', name:'昭源环方', alias:'Chiron GoRound TC', style:'圆体 / 可变', source:'ZeoSeven FontsAPI', cssUrl:'https://fontsapi.zeoseven.com/545/main/result.css', family:'Chiron GoRound TC VF', license:'OFL-1.1' },
 ];
 
-export const DEFAULT_FONT_ID = 'noto-sans-sc';
+export const DEFAULT_FONT_ID = 'system';
 export const getFontById = (id) => FONT_CATALOG.find(font => font.id === id) ?? FONT_CATALOG[0];
 
 
@@ -30,7 +31,7 @@ export const getFontById = (id) => FONT_CATALOG.find(font => font.id === id) ?? 
 const loaded = new Map();
 
 export function loadFont(font) {
-  if (!font?.id || !font?.cssUrl || typeof document === 'undefined') return Promise.resolve(false);
+  if (!font?.id || !font?.cssUrl || typeof document === 'undefined') return Promise.resolve(true);
   if (loaded.has(font.id)) return loaded.get(font.id);
   const promise = new Promise((resolve) => {
     const existing = document.querySelector(`link[data-mybox-font="${font.id}"]`);
