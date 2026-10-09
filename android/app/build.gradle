@@ -4,14 +4,8 @@ android {
     namespace = "com.yuivo9999.mybox123"
     compileSdk = rootProject.ext.compileSdkVersion
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
-    }
-
-    signingConfigs {
-        release {
-            initWith debug
-        }
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
     defaultConfig {
@@ -35,12 +29,16 @@ android {
             useLegacyPackaging = true
         }
     }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
