@@ -1,6 +1,5 @@
 {
   "name": "tvbox-react-v1",
-  "description": "MyBox TVBox React multi-platform player and aggregator",
   "private": true,
   "version": "0.3.0",
   "type": "module",
@@ -8,13 +7,13 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "test:live": "node tests/architecture/test-runner.mjs",
-    "test:playback": "node tests/architecture/test-runner.mjs",
+    "test:live": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
+    "test:playback": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
     "test:parser": "node tests/architecture/test-runner.mjs",
     "test:player": "node tests/architecture/test-runner.mjs",
     "test:state": "node tests/architecture/test-runner.mjs",
     "test:movie": "node tests/architecture/test-runner.mjs",
-    "test": "node -e \"console.log('Tests bypassed')\"",
+    "test": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/react/page-boundaries.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
     "test:cache": "node tests/architecture/test-runner.mjs",
     "test:errors": "node tests/architecture/test-runner.mjs",
     "test:webview-runtime": "node tests/architecture/test-runner.mjs",
@@ -23,16 +22,18 @@
     "test:acceptance": "node tests/architecture/test-runner.mjs",
     "test:architecture": "node tests/architecture/test-runner.mjs",
     "test:execution": "node tests/architecture/test-runner.mjs",
-    "test:react": "node tests/react/page-boundaries.test.mjs"
+    "test:react": "node tests/react/page-boundaries.test.mjs",
+    "proxy": "node scripts/hls-proxy-server.mjs"
   },
   "dependencies": {
+    "@capacitor/core": "8.5.2",
     "@vitejs/plugin-react": "6.1.1",
     "hls.js": "^1.7.3",
     "lucide-react": "1.50.0",
+    "mpegts.js": "^1.8.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "vite": "8.3.2",
-    "@capacitor/core": "8.5.2"
+    "vite": "8.3.2"
   },
   "devDependencies": {
     "@capacitor/android": "8.5.2",

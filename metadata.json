@@ -1,10 +1,6 @@
 {
   "name": "TVBox React",
   "description": "A high-performance media player and live TV aggregator built with React, supporting M3U, XML, and various streaming formats.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ],
   "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ],
