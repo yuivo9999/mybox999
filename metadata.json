@@ -1,6 +1,12 @@
 {
-  "name": "MyBox",
-  "description": "MyBox 多端影视与电视直播聚合播放平台 (Web & Android)",
+  "name": "TVBox React",
+  "description": "A high-performance media player and live TV aggregator built with React, supporting M3U, XML, and various streaming formats.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
 }

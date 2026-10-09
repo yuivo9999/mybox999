@@ -1,0 +1,82 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "com.yuivo9999.mybox123"
+    compileSdk = rootProject.ext.compileSdkVersion
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    defaultConfig {
+        applicationId "com.yuivo9999.mybox123"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+
+    // Unified native playback backends: Media3/ExoPlayer is primary, IJK and
+    // Android MediaPlayer are fallback engines behind the same JS bridge.
+    def media3Version = "1.11.1"
+    implementation "androidx.media3:media3-exoplayer:${media3Version}"
+    implementation "androidx.media3:media3-exoplayer-hls:${media3Version}"
+    implementation "androidx.media3:media3-exoplayer-dash:${media3Version}"
+    implementation "androidx.media3:media3-exoplayer-rtsp:${media3Version}"
+    implementation "androidx.media3:media3-datasource-okhttp:${media3Version}"
+
+    // IJK fork with a published full Android artifact. This avoids the retired
+    // Bintray/JCenter-only Bilibili coordinates while retaining the IJK API.
+    implementation "io.github.flutterplayer:fijkplayer-full:0.1.18"
+
+    // Sandboxed JavaScript runtime for TVBox Drpy extensions. Network/file
+    // capabilities are not exposed directly to scripts; they are provided by
+    // the controlled runtime adapter.
+    implementation "org.mozilla:rhino:1.7.15"
+    // HTML DOM + CSS selector engine for Drpy jq/pdfh/pdfa/pd compatibility.
+    implementation "org.jsoup:jsoup:1.20.1"
+    // Native TVBox DoH transport. Uses the system resolver only for DoH bootstrap.
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+    implementation "com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0"
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
