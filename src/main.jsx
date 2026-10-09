@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './app.css';
+import { AppRoot } from './App.jsx';
 
 const rootElement = document.getElementById('root');
 
@@ -13,7 +14,7 @@ function renderBootError(error) {
       <section style="width:min(720px,100%);border:1px solid #343944;border-radius:16px;padding:24px;background:#151821">
         <h1 style="margin:0 0 12px;font-size:22px">应用启动失败</h1>
         <p style="margin:0 0 16px;color:#c9ced8;line-height:1.6">React 应用在启动阶段发生异常。请保留下面的信息用于定位，不需要清除应用数据。</p>
-        <pre style="white-space:pre-wrap;word-break:break-word;margin:0;padding:16px;border-radius:10px;background:#0b0d12;color:#ffb4ab;font-size:13px;line-height:1.5">${escapeHtml(message)}${stack ? '\\n\\n' + escapeHtml(stack) : ''}</pre>
+        <pre style="white-space:pre-wrap;word-break:break-word;margin:0;padding:16px;border-radius:10px;background:#0b0d12;color:#ffb4ab;font-size:13px;line-height:1.5">${escapeHtml(message)}${stack ? '\n\n' + escapeHtml(stack) : ''}</pre>
       </section>
     </main>
   `;
@@ -40,8 +41,8 @@ if (!rootElement) {
   throw new Error('ROOT_ELEMENT_NOT_FOUND');
 }
 
-import('./App.jsx')
-  .then(({ AppRoot }) => {
-    createRoot(rootElement).render(<AppRoot />);
-  })
-  .catch(renderBootError);
+try {
+  createRoot(rootElement).render(<AppRoot />);
+} catch (error) {
+  renderBootError(error);
+}

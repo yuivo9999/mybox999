@@ -21,6 +21,19 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         WebView webView = getBridge().getWebView();
+        if (webView != null) {
+            WebView.setWebContentsDebuggingEnabled(true);
+            android.webkit.WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setAllowFileAccess(true);
+            settings.setAllowContentAccess(true);
+            settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+            webView.setBackgroundColor(0xFF0B0D12);
+        }
+
         playbackBridge = new NativePlaybackBridge(this, webView);
         webView.addJavascriptInterface(playbackBridge, NativePlaybackBridge.JS_NAME);
 
