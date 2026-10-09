@@ -31,12 +31,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
@@ -99,6 +103,29 @@ public final class NativePlaybackBridge {
     // Monotonically increases for every load/fallback. Native callbacks from an
     // obsolete engine instance must never mutate the newly selected playback.
     private long playbackGeneration = 0L;
+
+    // Live streams in IPTV lists frequently have no file extension (short links,
+    // *.php, *.ctv, /huya/123) and 302 to an m3u8 / flv / ts. The URL alone cannot
+    // tell us which, so Live loads probe the real content first (see probeStream).
+    private static final String PROBE_UA =
+            "Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+    private final okhttp3.OkHttpClient probeClient = new okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
+            .build();
+    private final ExecutorService resolveExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "stream-probe");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile okhttp3.Call probeCall;
+    private String loadRequestedEngine = ENGINE_IJK;
+    private String loadRequestedDecoder = "hardware";
+    private boolean pendingResolve = false;
+    private boolean prepareRequested = false;
 
     private ExoPlayer exoPlayer;
     private IjkMediaPlayer ijkPlayer;
@@ -192,29 +219,54 @@ public final class NativePlaybackBridge {
                             (int) Math.round((hint == null ? 200d : hint.optDouble("vodBufferMaxSeconds", 200d)) * 1000d)))
                     : VOD_BUFFER_MAX_MS;
             configuredFallbackOrder = readStringList(hint == null ? null : hint.optJSONArray("fallbackOrder"));
-            engineOrder = buildEngineOrder(requested, url, input.optString("protocol", ""));
-
-            engineIndex = 0;
-            selectedEngine = engineOrder.get(engineIndex);
-            // Explicit UI selection wins over persisted per-engine defaults.
-            // decoderModes is only the fallback when no decoder was requested for
-            // this load.
-            String requestedDecoder = hint == null ? "hardware" : hint.optString("decoder", "hardware").trim().toLowerCase();
-            decoderMode = requestedDecoder.isEmpty() || "auto".equals(requestedDecoder)
-                    ? decoderModes.getOrDefault(selectedEngine, "hardware")
-                    : requestedDecoder;
-            if (ENGINE_IJK.equals(selectedEngine) && !"software".equals(decoderMode)) {
-                decoderMode = "hardware";
-            } else if (ENGINE_EXO.equals(selectedEngine) && !"software".equals(decoderMode)) {
-                decoderMode = "hardware";
-            }
+            loadRequestedEngine = requested;
+            loadRequestedDecoder = hint == null ? "hardware" : hint.optString("decoder", "hardware").trim().toLowerCase();
             prepared = false;
             wantPlay = false;
+            prepareRequested = false;
+            pendingResolve = false;
+            cancelProbe();
             releaseCurrentEngine();
 
             textureView.setVisibility(TextureView.VISIBLE);
             textureView.bringToFront();
-            createCurrentEngine();
+
+            if (livePlayback && needsStreamProbe(url)) {
+                // Resolve redirects + real container format off the JS thread, then build
+                // the engine. prepareMedia()/playMedia() calls that arrive meanwhile are queued.
+                pendingResolve = true;
+                final long generation = playbackGeneration;
+                final String probeUrl = url;
+                final Map<String, String> probeHeaders = headers;
+                final String probeCookies = cookies;
+                resolveExecutor.execute(() -> {
+                    synchronized (NativePlaybackBridge.this) {
+                        if (generation != playbackGeneration || released) return;
+                    }
+                    ProbeResult result = probeStream(probeUrl, probeHeaders, probeCookies);
+                    synchronized (NativePlaybackBridge.this) {
+                        if (generation != playbackGeneration || released) return;
+                        pendingResolve = false;
+                        if (result != null) {
+                            if (result.finalUrl != null && !result.finalUrl.isEmpty()) url = result.finalUrl;
+                            if (result.protocol != null) mediaProtocol = result.protocol;
+                        }
+                        try {
+                            beginEngine();
+                            attachSurface();
+                            if (prepareRequested) {
+                                prepareRequested = false;
+                                prepareMedia("{}");
+                            }
+                        } catch (Throwable e) {
+                            fallbackOrError("PLAYER_LOAD_ERROR:" + safeMessage(e), generation);
+                        }
+                    }
+                });
+                return ok("engine", "pending");
+            }
+
+            beginEngine();
             attachSurface();
             return ok("engine", selectedEngine);
         } catch (Exception e) {
@@ -275,6 +327,10 @@ public final class NativePlaybackBridge {
     public synchronized String prepareMedia(String ignored) {
         if (released) return error("PLAYER_RELEASED");
         if (url == null || url.isEmpty()) return error("PLAYER_INPUT_REQUIRED");
+        if (pendingResolve) {
+            prepareRequested = true;
+            return ok("queued", true);
+        }
         try {
             prepared = false;
             if (ENGINE_EXO.equals(selectedEngine)) {
@@ -447,7 +503,10 @@ public final class NativePlaybackBridge {
         playbackGeneration += 1L;
         wantPlay = false;
         prepared = false;
+        pendingResolve = false;
+        prepareRequested = false;
         pausedByHost = false;
+        cancelProbe();
         releaseCurrentEngine();
         if (textureView != null) {
             detachSurface();
@@ -478,6 +537,108 @@ public final class NativePlaybackBridge {
         if (released) return;
         releaseMedia("{}");
         released = true;
+        resolveExecutor.shutdownNow();
+    }
+
+    private static final class ProbeResult {
+        final String finalUrl;
+        final String protocol;
+        ProbeResult(String finalUrl, String protocol) {
+            this.finalUrl = finalUrl;
+            this.protocol = protocol;
+        }
+    }
+
+    private void cancelProbe() {
+        okhttp3.Call call = probeCall;
+        if (call != null) {
+            try { call.cancel(); } catch (Throwable ignored) {}
+        }
+    }
+
+    /** Only URLs whose path does not already name the container need probing. */
+    private static boolean needsStreamProbe(String mediaUrl) {
+        String v = mediaUrl == null ? "" : mediaUrl.trim().toLowerCase();
+        if (!(v.startsWith("http://") || v.startsWith("https://"))) return false;
+        String path = v;
+        int q = path.indexOf('?');
+        if (q >= 0) path = path.substring(0, q);
+        int h = path.indexOf('#');
+        if (h >= 0) path = path.substring(0, h);
+        if (path.contains("/pltv/") || path.contains("/tvod/")) return false;
+        return !(path.endsWith(".m3u8") || path.endsWith(".flv") || path.endsWith(".mpd")
+                || path.endsWith(".mp4") || path.endsWith(".ts"));
+    }
+
+    /**
+     * GET the URL (following redirects), read the first bytes and classify the real
+     * container: hls / flv / ts / mp4. Returns null on any failure so the caller
+     * falls back to the original URL and the engines try on their own.
+     */
+    private ProbeResult probeStream(String target, Map<String, String> requestHeaders, String cookieHeader) {
+        try {
+            okhttp3.Request.Builder rb = new okhttp3.Request.Builder().url(target).get();
+            boolean hasUa = false;
+            for (Map.Entry<String, String> e : requestHeaders.entrySet()) {
+                rb.header(e.getKey(), e.getValue());
+                if ("user-agent".equalsIgnoreCase(e.getKey())) hasUa = true;
+            }
+            if (!hasUa) rb.header("User-Agent", PROBE_UA);
+            if (cookieHeader != null && !cookieHeader.isEmpty()) rb.header("Cookie", cookieHeader);
+            okhttp3.Call call = probeClient.newCall(rb.build());
+            probeCall = call;
+            try (okhttp3.Response response = call.execute()) {
+                if (!response.isSuccessful()) return null;
+                String finalUrl = response.request().url().toString();
+                String contentType = response.header("Content-Type", "");
+                byte[] buf = new byte[512];
+                int n = 0;
+                okhttp3.ResponseBody body = response.body();
+                if (body != null) {
+                    InputStream in = body.byteStream();
+                    while (n < buf.length) {
+                        int r = in.read(buf, n, buf.length - n);
+                        if (r < 0) break;
+                        n += r;
+                    }
+                }
+                return new ProbeResult(finalUrl, sniffProtocol(buf, n, contentType));
+            }
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static String sniffProtocol(byte[] b, int n, String contentType) {
+        int i = 0;
+        if (n >= 3 && (b[0] & 0xFF) == 0xEF && (b[1] & 0xFF) == 0xBB && (b[2] & 0xFF) == 0xBF) i = 3;
+        while (i < n && (b[i] == ' ' || b[i] == '\n' || b[i] == '\r' || b[i] == '\t')) i++;
+        if (n - i >= 7 && new String(b, i, 7, java.nio.charset.StandardCharsets.US_ASCII).equals("#EXTM3U")) return "hls";
+        if (n >= 3 && b[0] == 'F' && b[1] == 'L' && b[2] == 'V') return "flv";
+        if (n >= 1 && (b[0] & 0xFF) == 0x47 && (n < 189 || (b[188] & 0xFF) == 0x47)) return "ts";
+        if (n >= 8 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p') return "mp4";
+        String ct = contentType == null ? "" : contentType.toLowerCase();
+        if (ct.contains("mpegurl")) return "hls";
+        if (ct.contains("x-flv")) return "flv";
+        if (ct.contains("mp2t")) return "ts";
+        if (ct.contains("video/mp4")) return "mp4";
+        return null;
+    }
+
+    /** Picks the engine order for the (possibly just-resolved) protocol and creates the first engine. */
+    private void beginEngine() throws Exception {
+        engineOrder = buildEngineOrder(loadRequestedEngine, url, mediaProtocol);
+        engineIndex = 0;
+        selectedEngine = engineOrder.get(engineIndex);
+        // Explicit UI selection wins over persisted per-engine defaults.
+        decoderMode = loadRequestedDecoder.isEmpty() || "auto".equals(loadRequestedDecoder)
+                ? decoderModes.getOrDefault(selectedEngine, "hardware")
+                : loadRequestedDecoder;
+        if ((ENGINE_IJK.equals(selectedEngine) || ENGINE_EXO.equals(selectedEngine))
+                && !"software".equals(decoderMode)) {
+            decoderMode = "hardware";
+        }
+        createCurrentEngine();
     }
 
     private static String normalizeProtocol(String protocol, String mediaUrl) {
