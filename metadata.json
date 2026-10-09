@@ -1,0 +1,6 @@
+{
+  "name": "MyBox",
+  "description": "MyBox 多端影视与电视直播聚合播放平台 (Web & Android)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
