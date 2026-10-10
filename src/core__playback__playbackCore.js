@@ -1,7 +1,6 @@
 import { PlaybackFailureCode, PlaybackKind } from './core__models__playback.js';
 import { parserService } from './core__parsers__parserService.js';
 import { createHtml5PlayerAdapter } from './core__player__html5PlayerAdapter.js';
-import { createNativePlayerAdapter } from './core__player__nativePlayerAdapter.js';
 import { PlayerState } from './core__player__playerInterface.js';
 import { createPlaybackEventBus } from './core__playback__playbackEventBus.js';
 import { createPlaybackStateMachine } from './core__playback__playbackStateMachine.js';
@@ -17,12 +16,6 @@ import { userDataService } from './me/userDataService.js';
 
 const LIVE_BUFFER_MAX_SECONDS = 60;
 const VOD_BUFFER_MAX_SECONDS = 200;
-
-function nativeAvailable() {
-  if (typeof window === 'undefined') return false;
-  const bridge=[window.TVBoxAndroidBridge,window.Android,window.tvboxBridge].find(x=>x&&typeof x==='object');
-  return Boolean(bridge && typeof bridge.loadMedia==='function');
-}
 
 export function createPlaybackCore(task,hooks={}) {
  let player=null,playerElement=null,resourceRelease=null,sessionId=null,released=false;
@@ -69,9 +62,17 @@ export function createPlaybackCore(task,hooks={}) {
  const attachPlayer=(element)=>{
   operationEpoch+=1;
   player?.release?.(); playerElement=element;
-  if(nativeAvailable()) player=createNativePlayerAdapter({onEvent:handlePlayerEvent});
-  else if(element) player=createHtml5PlayerAdapter(element,{onEvent:handlePlayerEvent});
-  else return null;
+  // All platforms use the page-owned HTMLMediaElement as the actual video surface.
+  // Android native playback engines are intentionally not attached: their Activity-level
+  // TextureView cannot inherit DOM scroll, clipping, or layout.
+  if(element) {
+   const isAndroidWebView = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
+   player=createHtml5PlayerAdapter(element,{
+    onEvent:handlePlayerEvent,
+    requireVideoFrame:isAndroidWebView,
+    allowMixedContent:isAndroidWebView,
+   });
+  } else return null;
   return player;
  };
 
@@ -111,11 +112,14 @@ export function createPlaybackCore(task,hooks={}) {
   if(!player)throw new Error('PLAYER_ADAPTER_NOT_ATTACHED');
   if(!isOperationCurrent(epoch))return null;
   const playbackSettings = userDataService.getSettings().playback;
-  const defaultEngine = task.request.kind === PlaybackKind.LIVE ? (playbackSettings.livePlayer || 'ijk') : (playbackSettings.moviePlayer || 'ijk');
+  const isAndroidDomPlayer = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
+  const defaultEngine = isAndroidDomPlayer
+   ? 'html5'
+   : (task.request.kind === PlaybackKind.LIVE ? (playbackSettings.livePlayer || 'ijk') : (playbackSettings.moviePlayer || 'ijk'));
   const playerHint = {
    ...(input.playerHint ?? {}),
-   engine: input.playerHint?.engine ?? defaultEngine,
-   decoder: input.playerHint?.decoder ?? playbackSettings.decoder?.[defaultEngine] ?? 'hardware',
+   engine: isAndroidDomPlayer ? 'html5' : (input.playerHint?.engine ?? defaultEngine),
+   decoder: isAndroidDomPlayer ? 'browser_auto' : (input.playerHint?.decoder ?? playbackSettings.decoder?.[defaultEngine] ?? 'hardware'),
    decoderModes: input.playerHint?.decoderModes ?? playbackSettings.decoder ?? {},
    fallbackEnabled: input.playerHint?.fallbackEnabled ?? playbackSettings.fallbackEnabled,
    fallbackOrder: input.playerHint?.fallbackOrder ?? playbackSettings.fallbackOrder,
@@ -223,7 +227,6 @@ export function createPlaybackCore(task,hooks={}) {
   },
   async resolveAndLoad(candidate=task.currentCandidate,options={}){cancelRecovery();return resolveAndLoad(candidate,options);},
   resolve,
-  setVideoViewBounds(bounds){return player?.setVideoViewBounds?.(bounds) ?? false;},
   async play(){if(!player)throw new Error('PLAYER_ADAPTER_NOT_ATTACHED');return player.play();},
   pause(){return player?.pause();},seek(s){return player?.seek(s);},setPlaybackRate(r){return player?.setPlaybackRate?.(r);},setVolume(v){return player?.setVolume(v);},
   getAudioTracks(){return player?.getAudioTracks?.()??[];},getSubtitleTracks(){return player?.getSubtitleTracks?.()??[];},selectAudioTrack(id){return player?.selectAudioTrack?.(id)??false;},selectSubtitleTrack(id){return player?.selectSubtitleTrack?.(id)??false;},getQualities(){return player?.getQualities?.()??[];},selectQuality(id){return player?.selectQuality?.(id)??false;},

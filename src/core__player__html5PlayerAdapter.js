@@ -16,8 +16,17 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
   let planning=false;
   let watchdog=null;
   let suppressVideoError=false;
+  let frameVerificationTimer=null;
+  let activeAttemptId=null;
+  let activeVisualFailure=null;
+  let pendingVisualVerification=false;
+  const requireVideoFrame=Boolean(hooks.requireVideoFrame);
 
   const clearWatchdog = () => { if (watchdog) { clearTimeout(watchdog); watchdog = null; } };
+  const clearFrameVerification = () => {
+    if (frameVerificationTimer) { clearTimeout(frameVerificationTimer); frameVerificationTimer=null; }
+    pendingVisualVerification=false;
+  };
   // HLS 回调可能在切台/切线路后迟到；只有当前加载令牌和实例都匹配时才允许改动状态。
   const isCurrentAttempt = (token, attemptId) =>
     !released && token === loadToken && attemptGuard.isCurrent(attemptId);
@@ -25,8 +34,56 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     isCurrentAttempt(token, attemptId) && generation === hlsGeneration && hlsInstance === hls;
   const isMixedContentUrl = (url) => isProxyMixedContentUrl(url);
 
+  const normalizeRequestHeaders = (next) => {
+    const headers={...(next?.headers??{})};
+    if(next?.referer&&!Object.keys(headers).some(k=>k.toLowerCase()==='referer'))headers.Referer=next.referer;
+    if(next?.userAgent&&!Object.keys(headers).some(k=>k.toLowerCase()==='user-agent'))headers['User-Agent']=next.userAgent;
+    return headers;
+  };
+  const isForbiddenBrowserHeader = (name) => /^(accept-charset|accept-encoding|access-control-request-headers|access-control-request-method|connection|content-length|cookie|cookie2|date|dnt|expect|host|keep-alive|origin|referer|te|trailer|transfer-encoding|upgrade|via|user-agent|proxy-.*|sec-.*)$/i.test(name);
+  const getBrowserSafeHeaders = (next) => {
+    const all=normalizeRequestHeaders(next);
+    const safe={};
+    const ignored=[];
+    for(const [name,value] of Object.entries(all)){
+      if(isForbiddenBrowserHeader(name))ignored.push(name);
+      else safe[name]=String(value??'');
+    }
+    if(next?.cookies)ignored.push('Cookie');
+    return {safe,ignored:[...new Set(ignored)]};
+  };
+  const warnedRequestContext=new Set();
+  const warnUnsupportedRequestContext=(next,mode)=>{
+    const {ignored}=getBrowserSafeHeaders(next);
+    if(!ignored.length)return;
+    const signature=`${mode}:${ignored.sort().join(',')}`;
+    if(warnedRequestContext.has(signature))return;
+    warnedRequestContext.add(signature);
+    emit('requestContextIgnored',{
+      reason:'HTML5_MEDIA_REQUEST_RESTRICTED_HEADERS',
+      mode,
+      headers:ignored,
+      message:'当前 WebView 的 HTML 视频请求不能直接伪造 Cookie、Referer 或 User-Agent；如果线路强制要求这些请求头，系统会按播放错误流程尝试其他本地播放策略或备用线路。',
+    });
+  };
+  const warnNativeVideoRequestContext=(next)=>{
+    const names=[...Object.keys(normalizeRequestHeaders(next)),...(next?.cookies?['Cookie']:[])];
+    if(!names.length)return;
+    const unique=[...new Set(names)];
+    const signature=`html5-video:${unique.slice().sort().join(',')}`;
+    if(warnedRequestContext.has(signature))return;
+    warnedRequestContext.add(signature);
+    emit('requestContextIgnored',{
+      reason:'HTML5_VIDEO_CANNOT_SET_CUSTOM_HEADERS',
+      mode:'html5-video',
+      headers:unique,
+      message:'HTML 视频元素不能为媒体 URL 自定义请求头；如果该线路必须依赖这些请求头，原生直放失败后将尝试页面内 HLS.js / MPEG-TS 路径或备用线路。',
+    });
+  };
+
   const cleanupHls = () => {
     clearWatchdog();
+    clearFrameVerification();
     if (hlsInstance) {
       try { hlsInstance.stopLoad(); } catch {}
       try { hlsInstance.detachMedia(); } catch {}
@@ -48,7 +105,36 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
   const onWaiting=()=>{if(!buffering){buffering=true;state=PlayerState.BUFFERING;emit('bufferingStart');emit('buffering');}};
   const endBuffering=()=>{if(buffering){buffering=false;emit('bufferingEnd');} if(state===PlayerState.BUFFERING)state=PlayerState.PLAYING;};
   const onCanPlay=()=>{endBuffering();state=PlayerState.PREPARING;emit('prepared');};
-  const onPlaying=()=>{endBuffering();state=PlayerState.PLAYING;emit('playing');};
+  const onPlaying=()=>{
+    if(!requireVideoFrame){endBuffering();state=PlayerState.PLAYING;emit('playing');return;}
+    if(pendingVisualVerification)return;
+    pendingVisualVerification=true;
+    const token=loadToken;
+    const attemptId=activeAttemptId;
+    const startedAt=Date.now();
+    const verify=()=>{
+      frameVerificationTimer=null;
+      if(!isCurrentAttempt(token,attemptId))return;
+      // Do not mark Android playback as successful until the page-owned video
+      // element has decoded a real video frame. This avoids audio-only / stale
+      // surface false positives from the former native overlay architecture.
+      if(video.videoWidth>0&&video.videoHeight>0&&video.readyState>=2){
+        pendingVisualVerification=false;
+        endBuffering();
+        state=PlayerState.PLAYING;
+        emit('playing',{videoWidth:video.videoWidth,videoHeight:video.videoHeight,renderSurface:'html-video'});
+        return;
+      }
+      if(Date.now()-startedAt>=6000){
+        pendingVisualVerification=false;
+        if(typeof activeVisualFailure==='function')activeVisualFailure();
+        else {state=PlayerState.ERROR;emit('error',{nativeError:new Error('VIDEO_FRAME_NOT_AVAILABLE')});}
+        return;
+      }
+      frameVerificationTimer=setTimeout(verify,160);
+    };
+    frameVerificationTimer=setTimeout(verify,80);
+  };
   const onPause=()=>{if(state!==PlayerState.COMPLETED&&state!==PlayerState.STOPPED&&!released){state=PlayerState.PAUSED;emit('paused');}};
   const onTimeUpdate=()=>emit('progress',{currentTime:video.currentTime,duration:video.duration});
   const onEnded=()=>{state=PlayerState.COMPLETED;emit('completed');};
@@ -69,12 +155,45 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     });
   };
 
+  // The Android host forwards Activity background/foreground transitions to the
+  // page-owned media element. Resume only a session that was actively playing
+  // before the host was paused; do not revive a session the user stopped.
+  let resumeAfterHostPause = false;
+  const onHostPause = () => {
+    resumeAfterHostPause = !released && !video.paused && !video.ended;
+    if (resumeAfterHostPause) video.pause();
+  };
+  const onHostResume = () => {
+    if (!resumeAfterHostPause || released) return;
+    resumeAfterHostPause = false;
+    tryAutoplay();
+  };
+  if (requireVideoFrame && typeof window !== 'undefined') {
+    window.addEventListener('tvbox-host-pause', onHostPause);
+    window.addEventListener('tvbox-host-resume', onHostResume);
+  }
+
   const failPlayback = (message) => {
     clearWatchdog();
+    clearFrameVerification();
     cleanupHls();
     suppressVideoError = false;
     state = PlayerState.ERROR;
     emit('error', { nativeError: new Error(message) });
+  };
+
+  const applyPreferredStrategy=(attempts,next)=>{
+    // Engine selection only changes the first in-page strategy. It never creates
+    // a separate Activity-level video surface.
+    const mode=String(next.playerHint?.webMode||'auto');
+    if(mode==='native_hardware'){
+      const nativeIndex=attempts.findIndex(item=>item.type==='native');
+      if(nativeIndex>0)attempts.unshift(...attempts.splice(nativeIndex,1));
+    } else if(mode==='hls_worker'||mode==='hls_lowlatency'){
+      const hlsIndex=attempts.findIndex(item=>item.type===STREAM_TYPE.HLS);
+      if(hlsIndex>0)attempts.unshift(...attempts.splice(hlsIndex,1));
+    }
+    return attempts;
   };
 
   /**
@@ -97,7 +216,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     // HTTPS 页面加载 HTTP 直播源时，HLS.js / mpegts.js 的 fetch/XHR 会受混合内容策略限制。
     // 没有用户/部署方显式配置代理时，只尝试浏览器原生媒体路径（浏览器可能自动升级媒体请求），
     // 随后由 LiveFeature 切换同频道下一条线路；不要对同一条必然受限的 URL 反复尝试多个解码器。
-    if (mixedContent && !canUseHlsProxy()) {
+    if (mixedContent && !canUseHlsProxy() && !hooks.allowMixedContent) {
       return { attempts: [{ type: 'native', url: next.url }] };
     }
     const addUnique = (list, candidate) => {
@@ -125,7 +244,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
       else addUnique(attempts, { type });
       if (type === STREAM_TYPE.HLS) addUnique(attempts, { type: 'native' });
       if (type === STREAM_TYPE.FLV || type === STREAM_TYPE.TS) addHlsAttempts(attempts);
-      return { attempts };
+      return { attempts: applyPreferredStrategy(attempts,next) };
     }
 
     let probed = null;
@@ -145,7 +264,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     addUnique(attempts, { type: 'native' });
     addUnique(attempts, { type: STREAM_TYPE.FLV });
     addUnique(attempts, { type: STREAM_TYPE.TS });
-    return { attempts };
+    return { attempts: applyPreferredStrategy(attempts,next) };
   };
 
   const startWebPlayback = async (next, token) => {
@@ -156,7 +275,13 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     if (token !== loadToken || released) return;
     if (plan.error) { failPlayback(plan.error); return; }
 
-    const attempts = plan.attempts || [];
+    let attempts = plan.attempts || [];
+    // On Android the existing setting now controls fallbacks between in-page
+    // HTML media / HLS.js / MPEG-TS attempts. Ordinary Web keeps its previous
+    // behavior unchanged.
+    if (hooks.requireVideoFrame && next.playerHint?.fallbackEnabled === false) {
+      attempts = attempts.slice(0, 1);
+    }
     let index = -1;
     let lastError = 'HLS_NETWORK_ERROR:all_attempts_failed';
     let playbackStarted = false;
@@ -167,12 +292,15 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
       if (expectedAttemptId !== null && !attemptGuard.isCurrent(expectedAttemptId)) return;
       if (reason) lastError = reason;
       const attemptId = attemptGuard.begin();
+      activeAttemptId=attemptId;
+      activeVisualFailure=()=>advance('VIDEO_FRAME_NOT_AVAILABLE',attemptId);
       clearWatchdog();
+      clearFrameVerification();
       cleanupHls();
       index += 1;
       if (index >= attempts.length) {
         // Keep the actionable root cause: browsers commonly surface mixed-content blocks as opaque media/network errors.
-        if (isMixedContentUrl(next.url)) {
+        if (isMixedContentUrl(next.url) && !hooks.allowMixedContent) {
           const proxyAttempted = attempts.some((item) => item.viaProxy);
           failPlayback(proxyAttempted
             ? 'MIXED_CONTENT_PROXY_FAILED:HTTPS_PAGE_HTTP_STREAM'
@@ -186,6 +314,10 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
       suppressVideoError = index < attempts.length - 1;
       const attempt = attempts[index];
       playbackStarted = false;
+      // Clear the previous source's frame before attaching the next strategy.
+      // An old channel's decoded frame must not satisfy Android's visual check.
+      try{video.pause();}catch{}
+      try{video.removeAttribute('src');video.load();}catch{}
       if (next.playerHint?.autoplay !== false) {
         watchdog = setTimeout(() => {
           if (!isCurrentAttempt(token, attemptId) || playbackStarted) return;
@@ -205,6 +337,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     };
 
     const startNative = (attempt, attemptId) => {
+      if((next.headers&&Object.keys(next.headers).length)||next.cookies||next.referer||next.userAgent)warnNativeVideoRequestContext(next);
       video.src = attempt.url || next.url;
       video.autoplay = next.playerHint?.autoplay !== false;
       video.load();
@@ -253,6 +386,19 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
           liveMaxLatencyDurationCount: isLiveStream ? 15 : 40,
           fragLoadingTimeOut: 25000,
           manifestLoadingTimeOut: 25000,
+          xhrSetup: (xhr) => {
+            const {safe}=getBrowserSafeHeaders(next);
+            xhr.withCredentials=Boolean(next.cookies||next.withCredentials);
+            for(const [name,value] of Object.entries(safe)){try{xhr.setRequestHeader(name,value);}catch{}}
+            warnUnsupportedRequestContext(next,'hls.js');
+          },
+          fetchSetup: (context, initParams) => {
+            const {safe}=getBrowserSafeHeaders(next);
+            const headers=new Headers(initParams.headers||{});
+            Object.entries(safe).forEach(([name,value])=>{try{headers.set(name,value);}catch{}});
+            warnUnsupportedRequestContext(next,'hls.js-fetch');
+            return new Request(context.url,{...initParams,headers,credentials:(next.cookies||next.withCredentials)?'include':(initParams.credentials||'same-origin')});
+          },
         });
         hlsInstance = hls;
         hls.attachMedia(video);
@@ -312,7 +458,8 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
           isLive: true,
           url: attempt.url || next.url,
           cors: true,
-          withCredentials: false,
+          withCredentials: Boolean(next.cookies||next.withCredentials),
+          headers: getBrowserSafeHeaders(next).safe,
         }, {
           enableWorker: true,
           liveBufferLatencyChasing: true,
@@ -320,6 +467,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
           liveBufferLatencyMinRemain: 1.5,
           autoCleanupSourceBuffer: true,
         });
+        warnUnsupportedRequestContext(next,'mpegts.js');
         mpegtsInstance = player;
         player.on(mpegts.Events.ERROR, (errType, detail) => {
           if (!isCurrentAttempt(token, attemptId) || mpegtsInstance !== player) return;
@@ -349,6 +497,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     get capabilities(){return createPlayerCapabilities(video);},
     load(next){
       if(released)throw new Error('PLAYER_ADAPTER_RELEASED');
+      resumeAfterHostPause=false;
       input=next;
       state=PlayerState.LOADING;
       hlsRecoveryCount=0;
@@ -361,8 +510,6 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
       video.removeAttribute('src');
       try { video.load(); } catch (e) {}
       void startWebPlayback(next, loadToken);
-      if(next.cookies&&typeof document!=='undefined'){try{for(const cookie of String(next.cookies).split(/;\s*/)){const i=cookie.indexOf('=');if(i>0)document.cookie=cookie;}}catch{}}
-      if(next.headers&&Object.keys(next.headers).length)emit('requestContextIgnored',{reason:'HTML5_VIDEO_CANNOT_SET_CUSTOM_HEADERS'});
       return input;
     },
     prepare(){if(!input)throw new Error('PLAYER_INPUT_REQUIRED');if(state===PlayerState.ERROR)return input;if(hlsInstance)return input;if(mpegtsInstance||planning)return input;state=PlayerState.PREPARING;video.load();return input;},
@@ -386,7 +533,8 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     seek(seconds){if(!Number.isFinite(seconds))return false;if(!Number.isFinite(video.duration)&&!video.seekable?.length)return false;video.currentTime=Math.max(0,seconds);return video.currentTime;},
     setPlaybackRate(rate){const r=Number(rate);if(Number.isFinite(r)&&r>0){video.playbackRate=r;}return video.playbackRate;},
     stop(){
-      loadToken+=1;attemptGuard.invalidate();planning=false;
+      resumeAfterHostPause=false;
+      loadToken+=1;attemptGuard.invalidate();planning=false;activeVisualFailure=null;activeAttemptId=null;clearFrameVerification();
       cleanupHls();
       try { video.pause(); } catch {}
       try { video.src = ""; } catch {}
@@ -403,7 +551,7 @@ export function createHtml5PlayerAdapter(video, hooks = {}) {
     selectSubtitleTrack(trackId){if(!video.textTracks)return false;for(const t of video.textTracks)t.mode=String(t.id)===String(trackId)?'showing':'disabled';emit('subtitleTrackChanged',{trackId});return true;},
     getQualities(){return input?.manifest?.variants?.map((v,i)=>({qualityId:String(v.attributes?.['VIDEO-RANGE']??v.attributes?.RESOLUTION??i),width:Number(v.attributes?.RESOLUTION?.split('x')?.[0]??0),height:Number(v.attributes?.RESOLUTION?.split('x')?.[1]??0),bitrate:Number(v.attributes?.BANDWIDTH??0),url:v.url}))??[];},
     selectQuality(qualityId){const q=this.getQualities().find(x=>x.qualityId===String(qualityId));if(!q)return false;const wasPlaying=!video.paused;const pos=video.currentTime;video.src=q.url;video.load();if(wasPlaying)void video.play();if(Number.isFinite(pos))try{video.currentTime=pos;}catch{}emit('qualityChanged',{quality:q});return q;},
-    release(){if(released)return;released=true;loadToken+=1;attemptGuard.invalidate();planning=false;cleanupHls();unbind();try { video.pause(); } catch {} try { video.src = ""; } catch {} try { video.removeAttribute('src'); } catch {} try { video.load(); } catch {} state=PlayerState.RELEASED;emit('released');},
+    release(){if(released)return;resumeAfterHostPause=false;if(requireVideoFrame&&typeof window!=='undefined'){window.removeEventListener('tvbox-host-pause',onHostPause);window.removeEventListener('tvbox-host-resume',onHostResume);}released=true;loadToken+=1;attemptGuard.invalidate();planning=false;activeVisualFailure=null;activeAttemptId=null;clearFrameVerification();cleanupHls();unbind();try { video.pause(); } catch {} try { video.src = ""; } catch {} try { video.removeAttribute('src'); } catch {} try { video.load(); } catch {} state=PlayerState.RELEASED;emit('released');},
   };
   return createPlayerAdapterContract(adapter);
 }

@@ -117,7 +117,6 @@ export const playbackService = {
       subscribe: listener => core.subscribe(listener),
       switchCandidate: id => core.switchCandidate(id),
       switchEpisode: (...args) => core.switchEpisode(...args),
-      setVideoViewBounds: bounds => core.setVideoViewBounds(bounds),
       pause: () => core.pause(),
       play: () => core.play(),
       seek: seconds => core.seek(seconds),

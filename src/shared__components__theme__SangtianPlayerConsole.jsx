@@ -1641,19 +1641,24 @@ export function SangtianPlayerWindow({
                           </div>
                           <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
                             {runtimeEnv === RUNTIME_ENV.WEB
-                              ? 'Web 浏览器下运行 HLS.js 低延时内核与 HTML5 原生硬解；ExoPlayer / IJKPlayer 为 Android 原生 APK 专享内核，Web 端选中后会自动由 HLS.js 平滑承载，软硬解互斥生效。'
-                              : 'Android 客户端由 MediaCodec 底层硬解与 FFmpeg 软解引擎分工容灾，支持 Exo 与 IJK 动态互斥切换。'}
+                              ? '普通手机浏览器使用 HLS.js 与 HTML5 原生媒体路径；播放画面由当前页面的视频元素承载，具体能力受浏览器与源站跨域策略限制。'
+                              : 'Android 端由当前页面内的 HTML 视频元素承载实际画面。选项只调整 HTML5 自动适配、HLS.js/MSE 与原生媒体的尝试顺序，不再启用独立 TextureView、ExoPlayer 或 IJKPlayer 视频表面。'}
                           </p>
                         </div>
 
                         <div className="settings-btn-grid vertical">
                           {(() => {
-                            const enginesList = currentRouteConfig?.engines || [
-                              { id: 'ijk_hardware', name: 'IJK 硬解' },
-                              { id: 'exo_hardware', name: 'Exo 硬解' },
-                              { id: 'exo_software', name: 'Exo 软解' },
-                              { id: 'ijk_software', name: 'IJK 软解' },
-                            ];
+                            const enginesList = currentRouteConfig?.engines || (runtimeEnv === RUNTIME_ENV.ANDROID
+                              ? [
+                                  { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）' },
+                                  ...(isLive ? [{ id: 'hls_lowlatency', name: 'HLS.js 低延迟直播' }] : [{ id: 'hls_worker', name: 'HLS.js / MSE 播放' }]),
+                                  { id: 'html5_hardware', name: 'HTML5 原生媒体优先' },
+                                ]
+                              : [
+                                  { id: 'hls_lowlatency', name: 'HLS.js 低延迟直播' },
+                                  { id: 'html5_hardware', name: 'HTML5 原生媒体优先' },
+                                  { id: 'hls_worker', name: 'HLS.js / MSE 播放' },
+                                ]);
                             
                             // 严格互斥计算唯一选中的激活引擎 ID，杜绝“硬解”与“软解”同时选中的异常
                             const rawEngine = String(decoderEngine || '').toLowerCase();
@@ -1664,11 +1669,13 @@ export function SangtianPlayerWindow({
                               exactActiveId = rawEngine.includes('soft') ? 'exo_software' : 'exo_hardware';
                             } else if (rawEngine.includes('ijk')) {
                               exactActiveId = rawEngine.includes('soft') ? 'ijk_software' : 'ijk_hardware';
+                            } else if (rawEngine === 'html5_auto') {
+                              exactActiveId = 'html5_auto';
                             } else if (rawEngine.includes('html5') || rawEngine.includes('hls')) {
                               exactActiveId = rawEngine.includes('hard') ? 'html5_hardware' : (isLive ? 'hls_lowlatency' : 'hls_worker');
                             }
                             if (!exactActiveId || !enginesList.some(e => e.id === exactActiveId)) {
-                              exactActiveId = enginesList[0]?.id || 'ijk_hardware';
+                              exactActiveId = enginesList[0]?.id || 'html5_auto';
                             }
 
                             return enginesList.map((engine) => {
