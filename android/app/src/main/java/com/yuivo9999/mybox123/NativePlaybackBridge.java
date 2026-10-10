@@ -78,6 +78,11 @@ public final class NativePlaybackBridge {
 
     private TextureView textureView;
     private Surface surface;
+    // The Activity-level TextureView must remain hidden until both media and a
+    // valid, currently visible DOM video rectangle are available.
+    private volatile boolean mediaLoaded = false;
+    private volatile boolean hasValidVideoBounds = false;
+    private volatile long boundsUpdateGeneration = 0L;
 
     private String url;
     private String mediaProtocol = "";
@@ -148,10 +153,9 @@ public final class NativePlaybackBridge {
         // committed, which makes an audio-only playback look like a frozen picture.
         textureView.setOpaque(true);
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-        );
+        // Never start as a full-screen native layer. A valid DOM rectangle must
+        // explicitly size the surface before it can be shown.
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
         root.addView(textureView, lp);
 
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
@@ -197,6 +201,8 @@ public final class NativePlaybackBridge {
             url = input.optString("url", "");
             if (url.isEmpty()) return error("PLAYER_URL_REQUIRED");
             playbackGeneration += 1L;
+            mediaLoaded = true;
+            mainHandler.post(this::updateTextureVisibility);
             mediaProtocol = normalizeProtocol(input.optString("protocol", ""), url);
 
             headers = readMap(input.optJSONObject("headers"));
@@ -228,8 +234,9 @@ public final class NativePlaybackBridge {
             cancelProbe();
             releaseCurrentEngine();
 
-            textureView.setVisibility(TextureView.VISIBLE);
-            textureView.bringToFront();
+            // Visibility is controlled by updateTextureVisibility() and is gated
+            // by a fresh, valid DOM rectangle. Do not reveal the old full-screen
+            // layout while a new channel is loading.
 
             if (livePlayback && needsStreamProbe(url)) {
                 // Resolve redirects + real container format off the JS thread, then build
@@ -278,33 +285,76 @@ public final class NativePlaybackBridge {
     public synchronized String setPlayerViewBounds(String payload) {
         try {
             JSONObject input = new JSONObject(payload == null ? "{}" : payload);
-            final float leftCss = (float) Math.max(0d, input.optDouble("left", 0d));
-            final float topCss = (float) Math.max(0d, input.optDouble("top", 0d));
-            final float widthCss = (float) Math.max(0d, input.optDouble("width", 0d));
-            final float heightCss = (float) Math.max(0d, input.optDouble("height", 0d));
-            final float viewportWidthCss = (float) Math.max(1d, input.optDouble("viewportWidth", 1d));
+            final float leftCss = finiteCss(input.optDouble("left", 0d));
+            final float topCss = finiteCss(input.optDouble("top", 0d));
+            final float widthCss = Math.max(0f, finiteCss(input.optDouble("width", 0d)));
+            final float heightCss = Math.max(0f, finiteCss(input.optDouble("height", 0d)));
+            final float viewportWidthCss = Math.max(0f, finiteCss(input.optDouble("viewportWidth", 0d)));
+            final float viewportHeightCss = Math.max(0f, finiteCss(input.optDouble("viewportHeight", 0d)));
+            final long updateGeneration = ++boundsUpdateGeneration;
 
-            final int webWidthPx = Math.max(1, webView.getWidth());
-            final float cssToPx = webWidthPx / viewportWidthCss;
-
-            final int[] webLocation = new int[2];
-            final int[] rootLocation = new int[2];
-            webView.getLocationOnScreen(webLocation);
-            FrameLayout root = activity.findViewById(android.R.id.content);
-            if (root == null) return error("PLAYER_ROOT_UNAVAILABLE");
-            root.getLocationOnScreen(rootLocation);
-
-            final int left = Math.max(0, Math.round((webLocation[0] - rootLocation[0]) + leftCss * cssToPx));
-            final int top = Math.max(0, Math.round((webLocation[1] - rootLocation[1]) + topCss * cssToPx));
-            final int width = Math.max(1, Math.round(widthCss * cssToPx));
-            final int height = Math.max(1, Math.round(heightCss * cssToPx));
-
+            // All Android View reads/writes happen on the main thread. A newer
+            // measurement invalidates older queued measurements so a slow UI
+            // queue cannot restore stale player coordinates after scrolling.
             mainHandler.post(() -> {
+                if (released || updateGeneration != boundsUpdateGeneration || textureView == null) return;
                 try {
-                    if (width <= 0 || height <= 0) {
+                    FrameLayout root = activity.findViewById(android.R.id.content);
+                    if (root == null || webView == null
+                            || widthCss <= 0f || heightCss <= 0f
+                            || viewportWidthCss <= 0f || viewportHeightCss <= 0f) {
+                        hasValidVideoBounds = false;
                         textureView.setVisibility(TextureView.GONE);
                         return;
                     }
+
+                    // Intersect the DOM rectangle with the WebView viewport. The
+                    // old implementation clamped negative left/top to zero but
+                    // retained the original dimensions, which pinned an oversized
+                    // TextureView to the screen edge when its DOM parent scrolled.
+                    final float visibleLeft = Math.max(0f, leftCss);
+                    final float visibleTop = Math.max(0f, topCss);
+                    final float visibleRight = Math.min(viewportWidthCss, leftCss + widthCss);
+                    final float visibleBottom = Math.min(viewportHeightCss, topCss + heightCss);
+                    if (visibleRight <= visibleLeft || visibleBottom <= visibleTop) {
+                        hasValidVideoBounds = false;
+                        textureView.setVisibility(TextureView.GONE);
+                        return;
+                    }
+
+                    final int webWidthPx = webView.getWidth();
+                    if (webWidthPx <= 0 || root.getWidth() <= 0 || root.getHeight() <= 0) {
+                        hasValidVideoBounds = false;
+                        textureView.setVisibility(TextureView.GONE);
+                        return;
+                    }
+                    final float cssToPx = webWidthPx / viewportWidthCss;
+                    final int[] webLocation = new int[2];
+                    final int[] rootLocation = new int[2];
+                    webView.getLocationOnScreen(webLocation);
+                    root.getLocationOnScreen(rootLocation);
+
+                    float leftPx = (webLocation[0] - rootLocation[0]) + visibleLeft * cssToPx;
+                    float topPx = (webLocation[1] - rootLocation[1]) + visibleTop * cssToPx;
+                    float rightPx = (webLocation[0] - rootLocation[0]) + visibleRight * cssToPx;
+                    float bottomPx = (webLocation[1] - rootLocation[1]) + visibleBottom * cssToPx;
+
+                    // Clip once more to the actual Android content root. This
+                    // guards edge-to-edge/inset differences on various devices.
+                    leftPx = Math.max(0f, leftPx);
+                    topPx = Math.max(0f, topPx);
+                    rightPx = Math.min((float) root.getWidth(), rightPx);
+                    bottomPx = Math.min((float) root.getHeight(), bottomPx);
+                    final int left = Math.round(leftPx);
+                    final int top = Math.round(topPx);
+                    final int width = Math.round(rightPx - leftPx);
+                    final int height = Math.round(bottomPx - topPx);
+                    if (width <= 0 || height <= 0) {
+                        hasValidVideoBounds = false;
+                        textureView.setVisibility(TextureView.GONE);
+                        return;
+                    }
+
                     FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) textureView.getLayoutParams();
                     if (lp == null) lp = new FrameLayout.LayoutParams(width, height);
                     lp.leftMargin = left;
@@ -312,14 +362,30 @@ public final class NativePlaybackBridge {
                     lp.width = width;
                     lp.height = height;
                     textureView.setLayoutParams(lp);
-                    textureView.setVisibility(TextureView.VISIBLE);
-                    textureView.bringToFront();
-                    attachSurface();
-                } catch (Throwable ignored) {}
+                    hasValidVideoBounds = true;
+                    updateTextureVisibility();
+                } catch (Throwable ignored) {
+                    hasValidVideoBounds = false;
+                    textureView.setVisibility(TextureView.GONE);
+                }
             });
             return ok("updated", true);
         } catch (Throwable e) {
             return error("PLAYER_VIEW_BOUNDS_ERROR:" + safeMessage(e));
+        }
+    }
+
+    private static float finiteCss(double value) {
+        return (Double.isNaN(value) || Double.isInfinite(value)) ? 0f : (float) value;
+    }
+
+    private void updateTextureVisibility() {
+        if (textureView == null) return;
+        if (mediaLoaded && hasValidVideoBounds) {
+            textureView.setVisibility(TextureView.VISIBLE);
+            textureView.bringToFront();
+        } else {
+            textureView.setVisibility(TextureView.GONE);
         }
     }
 
@@ -501,6 +567,7 @@ public final class NativePlaybackBridge {
         // 表现为“任何 m3u8 都无法播放”。永久释放只在 release()（Activity 销毁）中进行。
         if (released) return ok("released", true);
         playbackGeneration += 1L;
+        mediaLoaded = false;
         wantPlay = false;
         prepared = false;
         pendingResolve = false;
@@ -508,9 +575,15 @@ public final class NativePlaybackBridge {
         pausedByHost = false;
         cancelProbe();
         releaseCurrentEngine();
+        // Keep the last measured rectangle while soft-releasing a source. A
+        // channel can be replaced without unmounting its DOM player, so the
+        // next source may reuse the same geometry. The bounds-sync cleanup sends
+        // a zero-sized rectangle when the owning page actually unmounts.
         if (textureView != null) {
             detachSurface();
-            textureView.setVisibility(TextureView.GONE);
+            mainHandler.post(() -> {
+                if (textureView != null) textureView.setVisibility(TextureView.GONE);
+            });
         }
         emit("released", null);
         return ok("released", true);
