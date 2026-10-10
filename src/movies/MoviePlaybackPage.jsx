@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ListVideo, Search } from 'lucide-react';
 import { movieService } from './movieServices.js';
 import { playbackService } from '../core__services__playbackService.js';
+import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { searchMovieSources } from './movieServices.js';
 import { usePersistentState } from '../core__state__usePersistentState.js';
 import { SangtianTopBar } from '../shared__components__theme__SangtianTopBar.jsx';
@@ -220,39 +221,7 @@ export function MoviePlaybackPage({
     };
   }, [controller]);
 
-  useEffect(() => {
-    const body = playerWindowBodyRef.current;
-    if (!body || !controller?.setVideoViewBounds) return undefined;
-
-    const syncNativeVideoSurface = () => {
-      if (typeof window === 'undefined' || typeof body.getBoundingClientRect !== 'function') return;
-      const rect = body.getBoundingClientRect();
-      controller.setVideoViewBounds({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-      });
-    };
-
-    syncNativeVideoSurface();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(syncNativeVideoSurface)
-      : null;
-    observer?.observe(body);
-    window.addEventListener('resize', syncNativeVideoSurface);
-    window.addEventListener('orientationchange', syncNativeVideoSurface);
-    const timer = window.setTimeout(syncNativeVideoSurface, 150);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', syncNativeVideoSurface);
-      window.removeEventListener('orientationchange', syncNativeVideoSurface);
-      window.clearTimeout(timer);
-    };
-  }, [controller]);
+  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, controller), [controller]);
 
   // 动态在线匹配真实片源：若当前是静态/测试流，或者配置了真实影视源，自动跨源搜索匹配该片名的真实 m3u8 播放线路
   const sourcesKey = useMemo(() => (sources || []).map(s => s.sourceId).join(','), [sources]);
