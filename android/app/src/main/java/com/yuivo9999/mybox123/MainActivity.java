@@ -27,6 +27,9 @@ public class MainActivity extends BridgeActivity {
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
+            // The page-owned HTML <video> element is the Android playback surface.
+            // Permit inline/autoplay flows used by the in-page player controls.
+            settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setAllowFileAccess(true);
             settings.setAllowContentAccess(true);
             settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -46,10 +49,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
-        super.onPause();
         if (playbackBridge != null) {
             playbackBridge.onHostPause();
         }
+        super.onPause();
     }
 
     @Override
