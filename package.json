@@ -24,7 +24,8 @@
     "test:architecture": "node tests/architecture/test-runner.mjs",
     "test:execution": "node tests/architecture/test-runner.mjs",
     "test:react": "node tests/react/page-boundaries.test.mjs",
-    "proxy": "node scripts/hls-proxy-server.mjs"
+    "proxy": "node scripts/hls-proxy-server.mjs",
+    "test:android-video-architecture": "node --test tests/architecture/android-dom-video-architecture.test.mjs"
   },
   "dependencies": {
     "@capacitor/core": "8.5.2",
