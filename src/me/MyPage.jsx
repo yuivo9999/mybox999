@@ -8,6 +8,7 @@ import { RepoDetailView } from './RepoDetailView.jsx';
 import { FONT_CATALOG, getFontById } from './preferences.js';
 import { ensureFont } from './preferences.js';
 import { PLAYBACK_SCHEMES, getPlaybackScheme, getPlaybackSchemeId } from '../core__models__userData.js';
+import { detectRuntimeEnv, RUNTIME_ENV } from '../core__playback__playbackStrategyDispatcher.js';
 
 function MyPage({tab,movies,channels,favorites,history,sources,searches,progress,settings,onTab,onMovie,onLive,onLiveChannel,onSearchHistory,toggleFavorite,onClearData,onClearHistory,onSaveSources,onClearSearches,onRemoveSearch,onClearCache,onSourceEnabled,onSourceActive,onTestSource,onRemoveSource,onClearAllSources,onUpdateSettings}){
  const [fontPicker,setFontPicker]=useState(false);
@@ -171,34 +172,32 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
   </Page>;
  if(tab==='settings'){
   const playback=settings?.playback??{};
-  const decoder=playback.decoder??{};
+  const isAndroidPlayback=detectRuntimeEnv()===RUNTIME_ENV.ANDROID;
   const updatePlayback=(patch={})=>onUpdateSettings?.({
-    playback:{
-      ...playback,
-      ...patch,
-      decoder:{...(playback.decoder??{}),...(patch.decoder??{})},
-    },
+    playback:{...playback,...patch,decoder:{...(playback.decoder??{}),...(patch.decoder??{})}},
   });
-  const resolveScheme=(scope)=>getPlaybackScheme(
-    playback[scope+'PlaybackScheme'] || getPlaybackSchemeId(
-      playback[scope+'Player'] || 'ijk',
-      playback.decoder?.[playback[scope+'Player'] || 'ijk'] || 'hardware',
-    ),
-  );
+  const availableSchemes=(scope)=>isAndroidPlayback
+    ? PLAYBACK_SCHEMES.filter(item=>['html5_auto',scope==='live'?'hls_lowlatency':'hls_worker','html5_hardware'].includes(item.id))
+    : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android');
+  const resolveScheme=(scope)=>{
+    const saved=playback[scope+'PlaybackScheme'];
+    const legacy=getPlaybackSchemeId(playback[scope+'Player']||'ijk',playback.decoder?.[playback[scope+'Player']||'ijk']||'hardware');
+    const allowed=availableSchemes(scope);
+    const desired=isAndroidPlayback?(allowed.some(item=>item.id===saved)?saved:'html5_auto'):(saved||legacy);
+    return allowed.find(item=>item.id===desired)||allowed[0]||getPlaybackScheme('html5_auto');
+  };
   const applyScheme=(scope, schemeId)=>{
-    const scheme=getPlaybackScheme(schemeId);
-    updatePlayback({
-      [scope+'Player']:scheme.engine,
-      [scope+'PlaybackScheme']:scheme.id,
-      decoder:{[scheme.engine]:scheme.decoder},
-    });
+    const scheme=availableSchemes(scope).find(item=>item.id===schemeId)||availableSchemes(scope)[0];
+    if(!scheme)return;
+    updatePlayback({[scope+'Player']:scheme.engine,[scope+'PlaybackScheme']:scheme.id,decoder:{[scheme.engine]:scheme.decoder}});
   };
   const nextScheme=(scope)=>{
+    const schemes=availableSchemes(scope);
     const current=resolveScheme(scope);
-    const index=PLAYBACK_SCHEMES.findIndex(item=>item.id===current.id);
-    return PLAYBACK_SCHEMES[(index+1)%PLAYBACK_SCHEMES.length];
+    const index=schemes.findIndex(item=>item.id===current.id);
+    return schemes[(index+1)%schemes.length];
   };
-  const order=(playback.fallbackOrder??['ijk','exo','native']).join(' → ');
+  const order=isAndroidPlayback?'HTML5 原生媒体 → HLS.js/MSE → MPEG-TS/备用线路':(playback.fallbackOrder??['ijk','exo','native']).join(' → ');
   const movieScheme=resolveScheme('movie');
   const liveScheme=resolveScheme('live');
   return <Page><Header title="设置"/>
@@ -207,10 +206,14 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
    <SettingMenu icon={Radio} title="默认影视播放方案" value={movieScheme.label} onClick={()=>applyScheme('movie',nextScheme('movie').id)}/>
    <SettingMenu icon={Radio} title="默认直播播放方案" value={liveScheme.label} onClick={()=>applyScheme('live',nextScheme('live').id)}/>
    <SettingMenu icon={Radio} title="失败自动切换" value={playback.fallbackEnabled===false?'关闭':'开启'} onClick={()=>updatePlayback({fallbackEnabled:playback.fallbackEnabled===false})}/>
-   <SettingMenu icon={Radio} title="切换顺序" value={order} onClick={()=>updatePlayback({fallbackOrder:rotateOrder(playback.fallbackOrder)})}/>
-   <InfoCard title="可选播放方案" text={PLAYBACK_SCHEMES.map(item=>item.label).join(' · ') + '。默认方案为 IJKPlayer 硬解；点击默认影视/直播播放方案可循环选择。Native 仍只作为内部故障兜底，不作为用户播放方案入口。'}/>
+   {!isAndroidPlayback&&<SettingMenu icon={Radio} title="切换顺序" value={order} onClick={()=>updatePlayback({fallbackOrder:rotateOrder(playback.fallbackOrder)})}/>}
+   <InfoCard title="可选播放方案" text={isAndroidPlayback
+     ? 'HTML5 自动适配 · HLS.js/MSE · HTML5 原生媒体优先。三种方案都在当前页面的视频元素内部输出画面，不创建独立原生视频层；失败后可按协议尝试本地备用策略和线路。'
+     : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android').map(item=>item.label).join(' · ') + '。普通手机浏览器使用 HLS.js 或 HTML5 原生媒体，不调用 Android 原生视频引擎。'}/>
    <SectionTitle title="解码设置"/>
-   <InfoCard title="四种用户播放方案" text="IJKPlayer 硬解 · ExoPlayer 硬解 · ExoPlayer 软解 · IJKPlayer 软解。默认使用 IJKPlayer 硬解；影视与直播分别记忆各自方案，播放器内的“线路与解码”入口也可随时切换。Native/System 仅作为内部故障兜底。"/>
+   <InfoCard title={isAndroidPlayback?'页面内播放策略':'浏览器播放方案'} text={isAndroidPlayback
+     ? 'HTML5 自动适配会根据视频源尝试原生媒体、HLS.js/MSE 和 MPEG-TS；HLS.js/MSE 可在浏览器允许范围内添加安全请求头。IJKPlayer / ExoPlayer 不再作为 Android 用户可选的视频输出内核。'
+     : '普通手机浏览器使用其 HTML5 视频解码能力与 HLS.js/MSE 路径，实际能力取决于浏览器和源站的媒体格式、跨域与请求头策略。'}/>
    <SectionTitle title="线路设置"/>
    <SettingMenu icon={Radio} title="默认影视线路" value={sourceSettingLabel(sources,'movie',settings?.defaultMovieSource)} onClick={()=>onUpdateSettings?.({defaultMovieSource:nextSource(sources,'movie',settings?.defaultMovieSource)})}/>
    <SettingMenu icon={Radio} title="默认直播线路" value={sourceSettingLabel(sources,'live',settings?.defaultLiveSource)} onClick={()=>onUpdateSettings?.({defaultLiveSource:nextSource(sources,'live',settings?.defaultLiveSource)})}/>
