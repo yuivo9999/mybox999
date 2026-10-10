@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart, ListVideo, Film, Radio, Search } from 'lucide-react';
 import { movieService } from '../movies/movieServices.js';
 import { playbackService } from '../core__services__playbackService.js';
-import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { usePersistentState } from '../core__state__usePersistentState.js';
 import { SangtianTopBar } from '../shared__components__theme__SangtianTopBar.jsx';
 import { SangtianDrawer } from '../shared__components__theme__SangtianDrawer.jsx';
@@ -13,11 +12,8 @@ import {
 } from '../shared__components__theme__SangtianPlayerConsole.jsx';
 import { PlaybackPagePlayerBlock } from './PlayerBlocks.jsx';
 import { getPlaybackScheme } from '../core__models__userData.js';
-import { detectRuntimeEnv, RUNTIME_ENV } from '../core__playback__playbackStrategyDispatcher.js';
+import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection } from '../core__playback__playbackStrategyDispatcher.js';
 
-function normalizeDecoderSelection(player = 'ijk', mode = 'hardware') {
-  return getPlaybackScheme(String(player || 'ijk') + '_' + (String(mode).toLowerCase() === 'software' ? 'software' : 'hardware')).id;
-}
 
 function PlaybackView({
   request,
@@ -48,47 +44,66 @@ function PlaybackView({
     const isWeb = detectRuntimeEnv() === RUNTIME_ENV.WEB;
     const playback = settings?.playback || {};
     const scope = isLive ? 'live' : 'movie';
-    if (playback[scope + 'PlaybackScheme']) return getPlaybackScheme(playback[scope + 'PlaybackScheme']).id;
-    if (isWeb) return isLive ? 'hls_lowlatency' : 'hls_worker';
-    const engine = isLive ? playback.livePlayer : playback.moviePlayer;
-    return normalizeDecoderSelection(engine || 'ijk', playback.decoder?.[engine] || 'hardware');
+    const savedScheme = playback[scope + 'PlaybackScheme'];
+    if (isWeb) {
+      const allowedWebSchemes = isLive
+        ? ['hls_lowlatency', 'html5_hardware']
+        : ['hls_worker', 'html5_hardware'];
+      return allowedWebSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'hls_lowlatency' : 'hls_worker');
+    }
+    const allowedAndroidSchemes = isLive
+      ? ['html5_auto', 'hls_lowlatency', 'html5_hardware']
+      : ['html5_auto', 'hls_worker', 'html5_hardware'];
+    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : 'html5_auto';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
-    const scheme = getPlaybackScheme(engineInput);
-    const engine = scheme.engine;
-    const decoderMode = scheme.decoder;
-    const normalizedSelection = normalizeDecoderSelection(engine, decoderMode);
-    setDecoderEngine(normalizedSelection);
-
-    // 1. 保存“播放内核”与对应的硬/软解模式，不能把 exo_hardware/ijk_software
-    // 直接写进 livePlayer/moviePlayer，否则 NativePlaybackBridge 无法识别 engine。
+    const runtimeEnv = detectRuntimeEnv();
+    const currentRoute = getPlaybackRouteConfig({
+      runtime: runtimeEnv,
+      kind: isLive ? MEDIA_KIND.LIVE : MEDIA_KIND.VOD,
+      viewTier: VIEW_TIER.MAIN,
+    });
     const currentPlayback = settings?.playback || {};
+    let engine;
+    let decoderMode;
+    let selectedScheme;
+    let resolvedHint = {};
+
+    if (runtimeEnv === RUNTIME_ENV.ANDROID) {
+      const resolved = resolveEngineSelection(engineInput, currentRoute);
+      engine = resolved.engine;
+      decoderMode = resolved.decoder;
+      selectedScheme = ['html5_auto', 'hls_worker', 'hls_lowlatency', 'html5_hardware'].includes(engineInput)
+        ? engineInput
+        : 'html5_auto';
+      resolvedHint = resolved.playerHint;
+    } else {
+      // Keep the ordinary mobile browser's existing scheme mapping unchanged.
+      const scheme = getPlaybackScheme(engineInput);
+      engine = scheme.engine;
+      decoderMode = scheme.decoder;
+      selectedScheme = scheme.id;
+    }
+
+    setDecoderEngine(selectedScheme);
     saveSettings({
       ...settings,
       playback: {
         ...currentPlayback,
         [isLive ? 'livePlayer' : 'moviePlayer']: engine,
-        [isLive ? 'livePlaybackScheme' : 'moviePlaybackScheme']: scheme.id,
-        decoder: {
-          ...(currentPlayback.decoder || {}),
-          [engine]: decoderMode,
-        }
+        [isLive ? 'livePlaybackScheme' : 'moviePlaybackScheme']: selectedScheme,
+        decoder: { ...(currentPlayback.decoder || {}), [engine]: decoderMode },
       }
     });
 
-    // 2. 立即以新的解码内核与硬/软解模式重新载入并播放
     const retry = candidate || controller.start();
     if (retry) {
       setResolvedInput(null);
       setError('');
       const hintCand = {
         ...retry,
-        playerHint: {
-          ...(retry.playerHint || {}),
-          engine,
-          decoder: decoderMode,
-        }
+        playerHint: { ...(retry.playerHint || {}), engine, decoder: decoderMode, ...resolvedHint },
       };
       controller.resolveAndLoad(hintCand).catch(e => setError(e?.message || '重新加载失败'));
     }
@@ -246,7 +261,6 @@ function PlaybackView({
     };
   }, [controller, request, isLive, recordProgress]);
 
-  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, controller), [controller]);
 
   const switchCandidate = id => {
     const next = controller.switchCandidate(id);

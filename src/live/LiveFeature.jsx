@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, startTransiti
 import { ChevronLeft, Heart, Play, Radio } from 'lucide-react';
 import { liveService } from './liveServices.js';
 import { playbackService } from '../core__services__playbackService.js';
-import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { requestManager } from '../core__services__network__requestManager.js';
 import { tv1LiveService } from './liveServices.js';
 import { findNextLiveStreamIndex } from './liveRuntime.js';
@@ -120,15 +119,12 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const [resolvedStreams, setResolvedStreams] = useState(globalLiveCache.resolvedStreams || {});
   const [streamLoading, setStreamLoading] = useState(false);
   const [decoderEngine, setDecoderEngine] = useState(() => {
-    if (globalLiveCache.decoderEngine) return globalLiveCache.decoderEngine;
     const isWeb = detectRuntimeEnv() === RUNTIME_ENV.WEB;
-    if (isWeb) return 'hls_lowlatency';
+    if (isWeb) return globalLiveCache.decoderEngine || 'hls_lowlatency';
     const settings = persistentStateStore.getSnapshot()?.settings;
-    const currentPlayback = settings?.playback || {};
-    if (currentPlayback.livePlaybackScheme) return currentPlayback.livePlaybackScheme;
-    const player = currentPlayback.livePlayer || 'ijk';
-    const mode = currentPlayback.decoder?.[player] || 'hardware';
-    return `${player}_${mode}`;
+    const saved = settings?.playback?.livePlaybackScheme;
+    const candidate = globalLiveCache.decoderEngine || saved;
+    return ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(candidate) ? candidate : 'html5_auto';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -593,7 +589,6 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [allChannels, selectedChannelId]);
 
-  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, playbackController), [playbackController]);
 
   useEffect(() => {
     if (!playbackController) {

@@ -7,11 +7,8 @@ import { requestManager } from '../core__services__network__requestManager.js';
 import { SmartImage, EmptyState, LoadingState, ErrorState } from '../shared__components__StateViews.jsx';
 import { Tv1LivePlayerBlock } from './PlayerBlocks.jsx';
 import { getPlaybackScheme } from '../core__models__userData.js';
-import { detectRuntimeEnv, RUNTIME_ENV } from '../core__playback__playbackStrategyDispatcher.js';
+import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection } from '../core__playback__playbackStrategyDispatcher.js';
 
-function normalizeDecoderSelection(player = 'ijk', mode = 'hardware') {
-  return getPlaybackScheme(String(player || 'ijk') + '_' + (String(mode).toLowerCase() === 'software' ? 'software' : 'hardware')).id;
-}
 
 export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFavorite, onBack }) {
   const { saveSettings, settings } = usePersistentState();
@@ -26,10 +23,12 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
   const [decoderEngine, setDecoderEngine] = useState(() => {
     const isWeb = detectRuntimeEnv() === RUNTIME_ENV.WEB;
     const playback = settings?.playback || {};
-    if (playback.livePlaybackScheme) return getPlaybackScheme(playback.livePlaybackScheme).id;
-    if (isWeb) return 'hls_lowlatency';
-    const engine = playback.livePlayer || 'ijk';
-    return normalizeDecoderSelection(engine, playback.decoder?.[engine] || 'hardware');
+    if (isWeb) return ['hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
+      ? playback.livePlaybackScheme
+      : 'hls_lowlatency';
+    return ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
+      ? playback.livePlaybackScheme
+      : 'html5_auto';
   });
   const [isImmersive, setIsImmersive] = useState(false);
   const [resolvedInput, setResolvedInput] = useState(null);
@@ -85,11 +84,25 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
   const visible = useMemo(() => category === '全部' ? channels : channels.filter(channel => channel.category === category), [channels, category]);
 
   const handleSwitchDecoderEngine = async (engineInput) => {
-    const scheme = getPlaybackScheme(engineInput);
-    const engine = scheme.engine;
-    const decoderMode = scheme.decoder;
-    const normalizedSelection = scheme.id;
-    setDecoderEngine(normalizedSelection);
+    const runtimeEnv = detectRuntimeEnv();
+    let engine;
+    let decoderMode;
+    let selectedScheme;
+    let resolvedHint = {};
+    if (runtimeEnv === RUNTIME_ENV.ANDROID) {
+      const route = getPlaybackRouteConfig({ runtime: runtimeEnv, kind: MEDIA_KIND.LIVE, viewTier: VIEW_TIER.MAIN });
+      const resolved = resolveEngineSelection(engineInput, route);
+      engine = resolved.engine;
+      decoderMode = resolved.decoder;
+      selectedScheme = ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(engineInput) ? engineInput : 'html5_auto';
+      resolvedHint = resolved.playerHint;
+    } else {
+      const scheme = getPlaybackScheme(engineInput);
+      engine = scheme.engine;
+      decoderMode = scheme.decoder;
+      selectedScheme = scheme.id;
+    }
+    setDecoderEngine(selectedScheme);
 
     const currentPlayback = settings?.playback || {};
     saveSettings({
@@ -97,11 +110,8 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
       playback: {
         ...currentPlayback,
         livePlayer: engine,
-        livePlaybackScheme: scheme.id,
-        decoder: {
-          ...(currentPlayback.decoder || {}),
-          [engine]: decoderMode,
-        },
+        livePlaybackScheme: selectedScheme,
+        decoder: { ...(currentPlayback.decoder || {}), [engine]: decoderMode },
       },
     });
 
@@ -111,14 +121,10 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
       setPlaybackError('');
       const hinted = {
         ...target,
-        playerHint: {
-          ...(target.playerHint || {}),
-          engine,
-          decoder: decoderMode,
-        },
+        playerHint: { ...(target.playerHint || {}), engine, decoder: decoderMode, ...resolvedHint },
       };
       controllerRef.current.resolveAndLoad(hinted).catch(reason => {
-        setPlaybackError(reason?.message || '切换解码内核失败');
+        setPlaybackError(reason?.message || '切换播放策略失败');
       });
     }
   };
