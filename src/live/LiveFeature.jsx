@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, startTransiti
 import { ChevronLeft, Heart, Play, Radio } from 'lucide-react';
 import { liveService } from './liveServices.js';
 import { playbackService } from '../core__services__playbackService.js';
+import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { requestManager } from '../core__services__network__requestManager.js';
 import { tv1LiveService } from './liveServices.js';
 import { findNextLiveStreamIndex } from './liveRuntime.js';
@@ -592,43 +593,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [allChannels, selectedChannelId]);
 
-  useEffect(() => {
-    const body = playerWindowBodyRef.current;
-    if (!body || !playbackController?.setVideoViewBounds) return undefined;
-
-    const syncNativeVideoSurface = () => {
-      if (typeof window === 'undefined' || typeof body.getBoundingClientRect !== 'function') return;
-      const rect = body.getBoundingClientRect();
-      playbackController.setVideoViewBounds({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-      });
-    };
-
-    syncNativeVideoSurface();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(syncNativeVideoSurface)
-      : null;
-    observer?.observe(body);
-    window.addEventListener('resize', syncNativeVideoSurface);
-    window.addEventListener('orientationchange', syncNativeVideoSurface);
-    window.addEventListener('scroll', syncNativeVideoSurface, { passive: true });
-    document.addEventListener('scroll', syncNativeVideoSurface, { passive: true });
-    const timer = window.setTimeout(syncNativeVideoSurface, 150);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', syncNativeVideoSurface);
-      window.removeEventListener('orientationchange', syncNativeVideoSurface);
-      window.removeEventListener('scroll', syncNativeVideoSurface);
-      document.removeEventListener('scroll', syncNativeVideoSurface);
-      window.clearTimeout(timer);
-    };
-  }, [playbackController]);
+  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, playbackController), [playbackController]);
 
   useEffect(() => {
     if (!playbackController) {

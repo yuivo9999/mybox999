@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart, ListVideo, Film, Radio, Search } from 'lucide-react';
 import { movieService } from '../movies/movieServices.js';
 import { playbackService } from '../core__services__playbackService.js';
+import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { usePersistentState } from '../core__state__usePersistentState.js';
 import { SangtianTopBar } from '../shared__components__theme__SangtianTopBar.jsx';
 import { SangtianDrawer } from '../shared__components__theme__SangtianDrawer.jsx';
@@ -245,39 +246,7 @@ function PlaybackView({
     };
   }, [controller, request, isLive, recordProgress]);
 
-  useEffect(() => {
-    const body = playerWindowBodyRef.current;
-    if (!body || !controller?.setVideoViewBounds) return undefined;
-
-    const syncNativeVideoSurface = () => {
-      if (typeof window === 'undefined' || typeof body.getBoundingClientRect !== 'function') return;
-      const rect = body.getBoundingClientRect();
-      controller.setVideoViewBounds({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-      });
-    };
-
-    syncNativeVideoSurface();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(syncNativeVideoSurface)
-      : null;
-    observer?.observe(body);
-    window.addEventListener('resize', syncNativeVideoSurface);
-    window.addEventListener('orientationchange', syncNativeVideoSurface);
-    const timer = window.setTimeout(syncNativeVideoSurface, 150);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', syncNativeVideoSurface);
-      window.removeEventListener('orientationchange', syncNativeVideoSurface);
-      window.clearTimeout(timer);
-    };
-  }, [controller]);
+  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, controller), [controller]);
 
   const switchCandidate = id => {
     const next = controller.switchCandidate(id);
