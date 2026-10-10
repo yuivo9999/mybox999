@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ListVideo, Search } from 'lucide-react';
 import { movieService } from './movieServices.js';
 import { playbackService } from '../core__services__playbackService.js';
-import { observeNativeVideoBounds } from '../core__player__nativeVideoBoundsSync.js';
 import { searchMovieSources } from './movieServices.js';
 import { usePersistentState } from '../core__state__usePersistentState.js';
 import { SangtianTopBar } from '../shared__components__theme__SangtianTopBar.jsx';
@@ -49,11 +48,12 @@ export function MoviePlaybackPage({
   const [decoderEngine, setDecoderEngine] = useState(() => {
     const isWeb = detectRuntimeEnv() === RUNTIME_ENV.WEB;
     const playback = settings?.playback || {};
-    if (playback.moviePlaybackScheme) return playback.moviePlaybackScheme;
-    if (isWeb) return 'hls_worker';
-    const player = playback.moviePlayer || 'ijk';
-    const mode = playback.decoder?.[player] || 'hardware';
-    return `${player}_${mode}`;
+    if (isWeb) return ['hls_worker', 'hls_lowlatency', 'html5_hardware'].includes(playback.moviePlaybackScheme)
+      ? playback.moviePlaybackScheme
+      : 'hls_worker';
+    return ['html5_auto', 'hls_worker', 'html5_hardware'].includes(playback.moviePlaybackScheme)
+      ? playback.moviePlaybackScheme
+      : 'html5_auto';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -221,7 +221,6 @@ export function MoviePlaybackPage({
     };
   }, [controller]);
 
-  useEffect(() => observeNativeVideoBounds(playerWindowBodyRef.current, controller), [controller]);
 
   // 动态在线匹配真实片源：若当前是静态/测试流，或者配置了真实影视源，自动跨源搜索匹配该片名的真实 m3u8 播放线路
   const sourcesKey = useMemo(() => (sources || []).map(s => s.sourceId).join(','), [sources]);
