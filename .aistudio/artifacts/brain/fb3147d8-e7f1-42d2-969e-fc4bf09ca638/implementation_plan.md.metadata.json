@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan to fix the skeleton screen hang and enforce 100% offline-first APP startup (zero network calls on launch, DOM-ready guaranteed mount, and network activity strictly deferred to user-initiated source selection and refresh).",
-  "updatedAt":  "2026-10-09T21:20:39.038968113Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
