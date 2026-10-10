@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Copy, Maximize2, Minimize2, RotateCw, Sparkles, Terminal, Paperclip,
   Play, Pause, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Rewind, FastForward,
   FileText, LayoutGrid, SlidersHorizontal, Check, RefreshCw, Ratio,
   Lock, Unlock, ListVideo, Square, Heart, Search, Radio,
   Home, Film, User, Settings, GitBranch, Tv, Clock3, Wifi, CalendarDays,
-  ChevronUp, Eye, EyeOff, X
+  ChevronUp, Eye, EyeOff, X, Star
 } from 'lucide-react';
 import {
   getPlaybackRouteConfig,
@@ -14,6 +15,70 @@ import {
   MEDIA_KIND,
   VIEW_TIER
 } from './core__playback__playbackStrategyDispatcher.js';
+
+const NUMERIC_ASPECT_PRESETS = [
+  { id: '16:9', label: '16:9', title: '16:9 宽屏比例' },
+  { id: '16:10', label: '16:10', title: '16:10 宽屏比例' },
+  { id: '21:9', label: '21:9', title: '21:9 超宽屏比例' },
+  { id: '4:3', label: '4:3', title: '4:3 传统电视比例' },
+  { id: '3:2', label: '3:2', title: '3:2 横向比例' },
+  { id: '1:1', label: '1:1', title: '1:1 正方形比例' },
+  { id: '3:4', label: '3:4', title: '3:4 竖向比例' },
+  { id: '9:16', label: '9:16', title: '9:16 竖屏比例' },
+];
+
+const OTHER_ASPECT_PRESETS = [
+  { id: 'original', label: '原始比例', title: '按照视频源的实际宽高比显示' },
+  { id: 'custom', label: '自定义比例', title: '输入自定义宽高比' },
+];
+
+const FIT_MODE_OPTIONS = [
+  { id: 'contain', label: '完整显示', description: '保留全部画面，必要时出现黑边' },
+  { id: 'crop', label: '裁剪', description: '手动放大并移动，调整保留区域' },
+  { id: 'fill', label: '充满', description: '保持比例并自动铺满目标区域' },
+  { id: 'stretch', label: '拉伸', description: '强制填满目标区域，画面可能变形' },
+];
+
+function readStoredValue(key, fallback) {
+  try {
+    if (typeof window === 'undefined') return fallback;
+    const value = window.localStorage.getItem(key);
+    return value == null ? fallback : JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredValue(key, value) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+function ratioFromPreset(id, customWidth, customHeight, sourceRatio) {
+  if (id === 'original') return sourceRatio || 16 / 9;
+  if (id === 'custom') {
+    const width = Number(customWidth);
+    const height = Number(customHeight);
+    return width > 0 && height > 0 ? width / height : 16 / 9;
+  }
+  const [width, height] = String(id).split(':').map(Number);
+  return width > 0 && height > 0 ? width / height : 16 / 9;
+}
+
+function normalizedRatioLabel(widthValue, heightValue) {
+  const width = Math.round(Number(widthValue));
+  const height = Math.round(Number(heightValue));
+  if (!(width > 0 && height > 0)) return '自定义';
+  let a = width;
+  let b = height;
+  while (b) [a, b] = [b, a % b];
+  return `${width / Math.max(1, a)}:${height / Math.max(1, a)}`;
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, Number(value) || 0));
+}
 
 export function SangtianPlayerWindow({
   videoRef, controller, status, error, resolvedInput, candidate, request, onRetry, onSwitchCandidate, onStop,
@@ -29,6 +94,7 @@ export function SangtianPlayerWindow({
   onTimeMetricsChange,
   idleText = '',
 }) {
+  const aspectStoragePrefix = isLive ? 'mybox.live.aspect' : 'mybox.vod.aspect';
   const [showTerminal, setShowTerminal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
@@ -38,8 +104,35 @@ export function SangtianPlayerWindow({
   const [showUnlockHint, setShowUnlockHint] = useState(false);
   const [lockHintKey, setLockHintKey] = useState(0);
   const lockHintTimeoutRef = useRef(null);
-  // Live 默认完整显示画面，避免手机/宽屏上裁切直播内容；用户仍可主动切换铺满模式。
-  const [aspectMode, setAspectMode] = useState(() => isLive ? 'original' : 'fill');
+  // 比例预设负责目标显示区域；适配模式负责视频如何填入该区域，两者独立保存。
+  const [aspectMode, setAspectMode] = useState(() => {
+    const saved = readStoredValue(`${aspectStoragePrefix}.preset`, null);
+    const valid = ['original', 'custom', ...NUMERIC_ASPECT_PRESETS.map(item => item.id)];
+    return valid.includes(saved) ? saved : (isLive ? 'original' : '16:9');
+  });
+  const [fitMode, setFitMode] = useState(() => {
+    const saved = readStoredValue(`${aspectStoragePrefix}.fit`, null);
+    return FIT_MODE_OPTIONS.some(item => item.id === saved) ? saved : (isLive ? 'contain' : 'fill');
+  });
+  const [showAspectPanel, setShowAspectPanel] = useState(false);
+  const [aspectNotice, setAspectNotice] = useState('');
+  const [customWidth, setCustomWidth] = useState(() => String(readStoredValue(`${aspectStoragePrefix}.customWidth`, 5)));
+  const [customHeight, setCustomHeight] = useState(() => String(readStoredValue(`${aspectStoragePrefix}.customHeight`, 4)));
+  const [aspectFavorites, setAspectFavorites] = useState(() => {
+    const saved = readStoredValue(`${aspectStoragePrefix}.favorites`, null);
+    return Array.isArray(saved) ? [...new Set(saved.filter(value => value === 'original' || value === 'custom' || NUMERIC_ASPECT_PRESETS.some(item => item.id === value)))].slice(0, 6) : ['16:9', '4:3', '9:16'];
+  });
+  const [lockZoomEnabled, setLockZoomEnabled] = useState(() => Boolean(readStoredValue(`${aspectStoragePrefix}.zoomEnabled`, false)));
+  const [lockZoomScale, setLockZoomScale] = useState(() => clampNumber(readStoredValue(`${aspectStoragePrefix}.zoomScale`, 1), 1, 3));
+  const [cropScale, setCropScale] = useState(() => clampNumber(readStoredValue(`${aspectStoragePrefix}.cropScale`, 1.15), 1, 2.5));
+  const [videoPan, setVideoPan] = useState(() => {
+    const saved = readStoredValue(`${aspectStoragePrefix}.pan`, null);
+    return saved && Number.isFinite(Number(saved.x)) && Number.isFinite(Number(saved.y))
+      ? { x: clampNumber(saved.x, -45, 45), y: clampNumber(saved.y, -45, 45) }
+      : { x: 0, y: 0 };
+  });
+  const aspectTransformRef = useRef({});
+  const gestureRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [bufferedSeconds, setBufferedSeconds] = useState(0);
@@ -89,18 +182,204 @@ export function SangtianPlayerWindow({
   }, []);
 
   const streamUrl = resolvedInput?.url || candidate?.mediaUrl || candidate?.url || candidate?.metadata?.url || '';
+  const customRatioLabel = normalizedRatioLabel(customWidth, customHeight);
   const aspectOptions = [
-    { id: 'fill', label: '铺满', title: '铺满画面（可能裁切）' },
-    { id: 'original', label: '原始', title: '保持视频源比例' },
-    { id: '16:9', label: '16:9', title: '16:9' },
-    { id: '4:3', label: '4:3', title: '4:3' },
+    ...OTHER_ASPECT_PRESETS.filter(item => item.id === 'original'),
+    ...NUMERIC_ASPECT_PRESETS,
+    { id: 'custom', label: customRatioLabel, title: `自定义比例 ${customRatioLabel}` },
   ];
   const currentAspect = aspectOptions.find(item => item.id === aspectMode) || aspectOptions[0];
+  const currentAspectRatio = clampNumber(ratioFromPreset(aspectMode, customWidth, customHeight, videoAspectRatio), 0.2, 5);
+  const mediaScale = (fitMode === 'crop' ? cropScale : 1) * (lockZoomEnabled ? lockZoomScale : 1);
 
-  const handleCycleAspect = () => {
-    const currentIndex = aspectOptions.findIndex(item => item.id === aspectMode);
-    const nextIndex = (currentIndex + 1) % aspectOptions.length;
-    setAspectMode(aspectOptions[nextIndex].id);
+  useEffect(() => {
+    writeStoredValue(`${aspectStoragePrefix}.preset`, aspectMode);
+  }, [aspectStoragePrefix, aspectMode]);
+  useEffect(() => {
+    writeStoredValue(`${aspectStoragePrefix}.fit`, fitMode);
+  }, [aspectStoragePrefix, fitMode]);
+  useEffect(() => {
+    writeStoredValue(`${aspectStoragePrefix}.customWidth`, Number(customWidth) > 0 ? Number(customWidth) : 5);
+    writeStoredValue(`${aspectStoragePrefix}.customHeight`, Number(customHeight) > 0 ? Number(customHeight) : 4);
+  }, [aspectStoragePrefix, customWidth, customHeight]);
+  useEffect(() => {
+    writeStoredValue(`${aspectStoragePrefix}.favorites`, aspectFavorites);
+  }, [aspectStoragePrefix, aspectFavorites]);
+  useEffect(() => {
+    writeStoredValue(`${aspectStoragePrefix}.zoomEnabled`, lockZoomEnabled);
+    writeStoredValue(`${aspectStoragePrefix}.zoomScale`, lockZoomScale);
+    writeStoredValue(`${aspectStoragePrefix}.cropScale`, cropScale);
+    writeStoredValue(`${aspectStoragePrefix}.pan`, videoPan);
+  }, [aspectStoragePrefix, lockZoomEnabled, lockZoomScale, cropScale, videoPan]);
+
+  aspectTransformRef.current = { fitMode, lockZoomEnabled, lockZoomScale, cropScale, videoPan };
+
+  useEffect(() => {
+    const video = videoRef?.current;
+    if (!video) return undefined;
+
+    const touchDistance = touches => {
+      if (!touches || touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = event => {
+      const state = aspectTransformRef.current;
+      if (event.touches.length >= 2) {
+        const activeZoom = state.lockZoomEnabled ? state.lockZoomScale : 1;
+        gestureRef.current = {
+          type: 'pinch',
+          startDistance: Math.max(1, touchDistance(event.touches)),
+          startZoom: activeZoom,
+        };
+        event.preventDefault();
+      } else if (event.touches.length === 1 && (state.fitMode === 'crop' || (state.lockZoomEnabled && state.lockZoomScale > 1))) {
+        const touch = event.touches[0];
+        gestureRef.current = {
+          type: 'pan',
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startPan: { ...(state.videoPan || { x: 0, y: 0 }) },
+        };
+      }
+    };
+
+    const handleTouchMove = event => {
+      const gesture = gestureRef.current;
+      if (!gesture) return;
+      const state = aspectTransformRef.current;
+      if (gesture.type === 'pinch' && event.touches.length >= 2) {
+        event.preventDefault();
+        const distance = touchDistance(event.touches);
+        setLockZoomEnabled(true);
+        setLockZoomScale(clampNumber(gesture.startZoom * distance / gesture.startDistance, 1, 3));
+      } else if (gesture.type === 'pan' && event.touches.length === 1 && (state.fitMode === 'crop' || state.lockZoomEnabled)) {
+        event.preventDefault();
+        const touch = event.touches[0];
+        const rect = video.parentElement?.getBoundingClientRect?.() || video.getBoundingClientRect();
+        const dx = rect.width > 0 ? (touch.clientX - gesture.startX) / rect.width * 100 : 0;
+        const dy = rect.height > 0 ? (touch.clientY - gesture.startY) / rect.height * 100 : 0;
+        setVideoPan({
+          x: clampNumber(gesture.startPan.x + dx, -45, 45),
+          y: clampNumber(gesture.startPan.y + dy, -45, 45),
+        });
+      }
+    };
+
+    const handleTouchEnd = event => {
+      if (!event.touches.length) {
+        gestureRef.current = null;
+        return;
+      }
+      const state = aspectTransformRef.current;
+      if (event.touches.length === 1 && (state.fitMode === 'crop' || state.lockZoomEnabled)) {
+        const touch = event.touches[0];
+        gestureRef.current = {
+          type: 'pan',
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startPan: { ...(state.videoPan || { x: 0, y: 0 }) },
+        };
+      }
+    };
+
+    video.addEventListener('touchstart', handleTouchStart, { passive: false });
+    video.addEventListener('touchmove', handleTouchMove, { passive: false });
+    video.addEventListener('touchend', handleTouchEnd, { passive: false });
+    video.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    return () => {
+      video.removeEventListener('touchstart', handleTouchStart);
+      video.removeEventListener('touchmove', handleTouchMove);
+      video.removeEventListener('touchend', handleTouchEnd);
+      video.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, [videoRef]);
+
+  const openAspectPanel = () => {
+    setAspectNotice('');
+    setShowAspectPanel(true);
+    setShowRightSidebar(false);
+    setShowLeftSidebar(false);
+    setShowEpisodeSidebar(false);
+    setImmersiveMenu(null);
+    clearControlsTimeout();
+    setShowFullscreenBar(true);
+  };
+
+  const closeAspectPanel = () => {
+    setShowAspectPanel(false);
+    if (fullscreen && isPlaying && !isLocked) resetControlsTimeout();
+  };
+
+  const toggleAspectFavorite = (id) => {
+    if (aspectFavorites.includes(id)) {
+      setAspectFavorites(current => current.filter(value => value !== id));
+      setAspectNotice('已从常用比例移除。');
+      return;
+    }
+    if (aspectFavorites.length >= 6) {
+      setAspectNotice('常用比例最多保存 6 项，请先移除一项。');
+      return;
+    }
+    setAspectFavorites(current => [...current, id]);
+    setAspectNotice('已添加到常用比例。');
+  };
+
+  const selectAspectPreset = (id) => {
+    setAspectMode(id);
+    setAspectNotice('');
+    if (id === 'custom') {
+      const width = Number(customWidth);
+      const height = Number(customHeight);
+      if (!(width > 0 && height > 0 && width <= 10000 && height <= 10000)) {
+        setAspectNotice('请先输入有效的自定义宽度和高度。');
+      }
+    }
+  };
+
+  const applyCustomAspect = () => {
+    const width = Number(customWidth);
+    const height = Number(customHeight);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 10000 || height > 10000) {
+      setAspectNotice('宽度和高度必须是 1–10000 之间的整数。');
+      return;
+    }
+    setAspectMode('custom');
+    setAspectNotice(`已应用自定义比例 ${normalizedRatioLabel(width, height)}。`);
+  };
+
+  const resetAspectTransform = () => {
+    setLockZoomEnabled(false);
+    setLockZoomScale(1);
+    setCropScale(1.15);
+    setVideoPan({ x: 0, y: 0 });
+    setAspectNotice('已恢复默认缩放与画面位置。');
+  };
+
+  const renderAspectCard = (option, compact = false) => {
+    const ratio = clampNumber(ratioFromPreset(option.id, customWidth, customHeight, videoAspectRatio), 0.2, 5);
+    const previewWidth = ratio >= 1 ? Math.min(40, 40 * ratio / Math.max(1, ratio)) : Math.max(8, 40 * ratio);
+    const previewHeight = ratio >= 1 ? Math.max(8, 40 / ratio) : 40;
+    const selected = aspectMode === option.id;
+    const favorite = aspectFavorites.includes(option.id);
+    return (
+      <div key={option.id} className={`aspect-ratio-card ${selected ? 'selected' : ''} ${compact ? 'compact' : ''}`}>
+        <button type="button" className="aspect-ratio-select" onClick={() => selectAspectPreset(option.id)} aria-pressed={selected} title={option.title}>
+          <span className="aspect-ratio-shape-wrap"><span className="aspect-ratio-shape" style={{ width: `${previewWidth}px`, height: `${previewHeight}px` }} /></span>
+          <strong>{option.label}</strong>
+          {selected && <Check className="aspect-ratio-selected-check" size={14} aria-hidden="true" />}
+        </button>
+        <button type="button" className={`aspect-favorite-toggle ${favorite ? 'is-favorite' : ''}`} onClick={() => toggleAspectFavorite(option.id)} aria-label={favorite ? `从常用比例移除 ${option.label}` : `将 ${option.label} 添加到常用比例`} title={favorite ? '取消常用' : '添加到常用'}>
+          <Star size={13} fill={favorite ? 'currentColor' : 'none'} />
+        </button>
+      </div>
+    );
+  };
+
+  const setAspectPanAxis = (axis, value) => {
+    setVideoPan(current => ({ ...current, [axis]: clampNumber(value, -45, 45) }));
   };
 
   const formatTime = value => {
@@ -212,6 +491,10 @@ export function SangtianPlayerWindow({
   useEffect(() => {
     if (!isLive) return undefined;
     onRegisterImmersiveBackHandler?.(() => {
+      if (showAspectPanel) {
+        setShowAspectPanel(false);
+        return true;
+      }
       if (immersiveMenu) {
         setImmersiveMenu(null);
         return true;
@@ -230,7 +513,7 @@ export function SangtianPlayerWindow({
       return false;
     });
     return () => onRegisterImmersiveBackHandler?.(null);
-  }, [isLive, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar, isSystemFullscreen, isWebFullscreen, onRegisterImmersiveBackHandler]);
+  }, [isLive, showAspectPanel, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar, isSystemFullscreen, isWebFullscreen, onRegisterImmersiveBackHandler]);
 
   useEffect(() => {
     const syncOrientation = () => {
@@ -263,6 +546,12 @@ export function SangtianPlayerWindow({
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key !== 'Escape' && event.key !== 'Esc') return;
+      if (showAspectPanel) {
+        event.preventDefault();
+        setShowAspectPanel(false);
+        setShowFullscreenBar(true);
+        return;
+      }
       if (document.fullscreenElement) return;
       if (isLive && immersiveRef.current && immersiveMenu) {
         event.preventDefault();
@@ -285,7 +574,7 @@ export function SangtianPlayerWindow({
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isLive, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
+  }, [isLive, showAspectPanel, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
 
   // 直播：沉浸状态由父级 isImmersive 统一驱动，关闭沉浸时同步收起 web 全屏
   useEffect(() => {
@@ -310,7 +599,7 @@ export function SangtianPlayerWindow({
     setControlHideProgressKey(value => value + 1);
     setShowFullscreenBar(true);
     // 打开侧栏/设置面板或锁屏时不自动隐藏，避免操作过程中面板突然消失。
-    if (fullscreen && isPlaying && !isLocked && !showLeftSidebar && !showRightSidebar && !showEpisodeSidebar) {
+    if (fullscreen && isPlaying && !isLocked && !showAspectPanel && !showLeftSidebar && !showRightSidebar && !showEpisodeSidebar) {
       controlsTimeoutRef.current = window.setTimeout(() => {
         if (fullscreenRef.current) setShowFullscreenBar(false);
         controlsTimeoutRef.current = null;
@@ -388,7 +677,7 @@ export function SangtianPlayerWindow({
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
-  }, [fullscreen, isPlaying, isLocked, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
+  }, [fullscreen, isPlaying, isLocked, showAspectPanel, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
 
   useEffect(() => {
     if (!fullscreen && isPlaying) {
@@ -719,6 +1008,14 @@ export function SangtianPlayerWindow({
   return (
     <div
       className={`sangtian-window ${isLive ? 'is-live-direct' : ''} ${isImmersive ? 'is-immersive' : ''} ${isLandscape ? 'is-landscape' : ''} ${isSystemFullscreen ? 'is-system-fullscreen' : ''} ${isWebFullscreen ? 'is-web-fullscreen' : ''} aspect-${aspectMode.replace(':','-')}`}
+      data-fit-mode={fitMode}
+      data-zoom-enabled={lockZoomEnabled ? 'true' : 'false'}
+      style={{
+        '--aspect-ratio-value': currentAspectRatio,
+        '--video-zoom': mediaScale,
+        '--video-pan-x': `${videoPan.x}%`,
+        '--video-pan-y': `${videoPan.y}%`,
+      }}
       onMouseMove={fullscreen ? resetControlsTimeout : resetEmbeddedControlsTimeout}
       onTouchStart={fullscreen ? resetControlsTimeout : resetEmbeddedControlsTimeout}
     >
@@ -752,9 +1049,9 @@ export function SangtianPlayerWindow({
                 <span>{isLandscape ? '竖屏' : '横屏'}</span>
               </button>
             )}
-            <button className={`sangtian-window-btn ${aspectMode !== 'fill' ? 'active' : ''}`} onClick={handleCycleAspect} title={currentAspect.title}>
+            <button className={`sangtian-window-btn ${showAspectPanel ? 'active' : ''}`} onClick={openAspectPanel} title="画面比例与缩放">
               <Ratio size={13}/>
-              <span>{currentAspect.label}</span>
+              <span>比例</span>
             </button>
             <button className="sangtian-window-btn icon-only" onClick={handleToggleFullscreen} title="全屏播放">
               <Maximize2 size={13}/>
@@ -785,7 +1082,10 @@ export function SangtianPlayerWindow({
       <div
         ref={videoContainerRef}
         className={`sangtian-window-body ${immersiveLivePage ? 'live-immersive-video' : ''}`}
-        style={immersiveLivePage ? { aspectRatio: `${videoAspectRatio}`, '--live-video-ratio': videoAspectRatio } : undefined}
+        style={{
+          aspectRatio: fullscreen ? undefined : `${currentAspectRatio}`,
+          '--live-video-ratio': currentAspectRatio,
+        }}
       >
         {showTerminal ? (
           <div className="sangtian-terminal-panel">
@@ -927,12 +1227,12 @@ export function SangtianPlayerWindow({
                     )}
                     <button
                       type="button"
-                      className={`embedded-nav-btn ${aspectMode !== 'fill' ? 'active' : ''}`}
-                      onClick={handleCycleAspect}
-                      title={currentAspect.title}
+                      className={`embedded-nav-btn ${showAspectPanel ? 'active' : ''}`}
+                      onClick={openAspectPanel}
+                      title="画面比例与缩放"
                     >
                       <Ratio size={13} />
-                      <span>{currentAspect.label}</span>
+                      <span>比例</span>
                     </button>
                     {!isLive && (
                       <button
@@ -1073,6 +1373,15 @@ export function SangtianPlayerWindow({
                   </div>
 
                   <div className="sangtian-topbar-right-actions">
+                    <button
+                      type="button"
+                      className={`sangtian-trigger-btn ${showAspectPanel ? 'active' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); openAspectPanel(); }}
+                      title="画面比例与缩放"
+                    >
+                      <Ratio size={15} />
+                      <span>比例</span>
+                    </button>
                     {/* VOD Episode Selector Trigger */}
                     {!isLive && episodes.length > 1 && (
                       <button
@@ -1126,8 +1435,8 @@ export function SangtianPlayerWindow({
                       <RotateCw size={13}/><span>{isLandscape ? '竖屏' : '横屏'}</span>
                     </button>
                   )}
-                  <button type="button" className="setting-btn" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleCycleAspect}>
-                    <Ratio size={13}/><span>{currentAspect.label}</span>
+                  <button type="button" className="setting-btn" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={openAspectPanel}>
+                    <Ratio size={13}/><span>画面比例</span>
                   </button>
                   <button type="button" className="setting-btn" style={{ padding: '4px 10px', fontSize: '12px', background: isLive && !isSystemFullscreen && !isWebFullscreen ? 'rgba(124,131,255,0.2)' : 'rgba(225,29,72,0.2)', color: isLive && !isSystemFullscreen && !isWebFullscreen ? '#c7c9ff' : '#f43f5e' }} onClick={handleToggleFullscreen}>
                     {isLive && !isSystemFullscreen && !isWebFullscreen ? <Maximize2 size={13}/> : <Minimize2 size={13}/>}<span>{isLive && !isSystemFullscreen && !isWebFullscreen ? '全屏' : '退出'}</span>
@@ -1246,17 +1555,10 @@ export function SangtianPlayerWindow({
                     </div>
                     <div className="sidebar-settings-content">
                       <div className="settings-group">
-                        <label>画面比例</label>
-                        <div className="settings-btn-grid">
-                          {aspectOptions.map((opt) => (
-                            <button
-                              key={opt.id}
-                              className={`setting-btn ${aspectMode === opt.id ? 'active' : ''}`}
-                              onClick={() => setAspectMode(opt.id)}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
+                        <label>画面比例与缩放</label>
+                        <div className="aspect-sidebar-current">
+                          <span><Ratio size={16} />当前：{currentAspect.label} · {FIT_MODE_OPTIONS.find(item => item.id === fitMode)?.label}</span>
+                          <button type="button" className="setting-btn active" onClick={openAspectPanel}>完整设置</button>
                         </div>
                       </div>
 
@@ -1528,8 +1830,8 @@ export function SangtianPlayerWindow({
                     )}
                     {!isLive && (
                       <>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); handleCycleAspect(); }}>
-                          <Ratio size={15}/>{currentAspect.label}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); openAspectPanel(); }}>
+                          <Ratio size={15}/>画面比例
                         </button>
                         <button type="button" onClick={(e) => { e.stopPropagation(); handleToggleFullscreen(); }}>
                           <Minimize2 size={15}/>退出全屏
@@ -1582,6 +1884,7 @@ export function SangtianPlayerWindow({
               <span>{isBuffering ? '正在缓冲' : isPlaying ? '正在播放' : status === 'error' ? '播放异常' : '已暂停'}</span>
             </div>
             <div className="live-immersive-controls-spacer" />
+            <button type="button" className="live-immersive-ratio-button" onClick={openAspectPanel} title="调整画面比例与缩放"><Ratio size={17} /><span>比例</span></button>
             <button type="button" className="live-immersive-fullscreen-button" onClick={handleToggleFullscreen} title="进入全屏播放"><Maximize2 size={18} /><span>全屏</span></button>
           </div>
 
@@ -1594,6 +1897,11 @@ export function SangtianPlayerWindow({
             </div>
             {showImmersiveActions && (
               <div className={`live-immersive-actions-grid ${runtimeEnv === RUNTIME_ENV.WEB ? 'is-web' : 'is-android'}`}>
+                <button type="button" className="live-immersive-action-card" onClick={openAspectPanel}>
+                  <span className="live-immersive-action-icon"><Ratio size={20} /></span>
+                  <span><strong>画面比例</strong><small>{currentAspect.label} · {FIT_MODE_OPTIONS.find(item => item.id === fitMode)?.label}</small></span>
+                  <ChevronRight size={17} />
+                </button>
                 {runtimeEnv !== RUNTIME_ENV.WEB && (
                   <button type="button" className="live-immersive-action-card" onClick={() => setImmersiveMenu('config')}>
                     <span className="live-immersive-action-icon"><Settings size={20} /></span>
@@ -1683,6 +1991,114 @@ export function SangtianPlayerWindow({
           </section>
         </div>
       )}
+
+      {showAspectPanel && createPortal((
+        <div
+          className="aspect-settings-backdrop"
+          onClick={event => {
+            event.stopPropagation();
+            if (event.target === event.currentTarget) closeAspectPanel();
+          }}
+        >
+          <section className="aspect-settings-sheet" role="dialog" aria-modal="true" aria-label="画面比例与缩放设置" onClick={event => event.stopPropagation()}>
+            <div className="aspect-settings-grabber" />
+            <header className="aspect-settings-header">
+              <div>
+                <strong>画面比例</strong>
+                <small>调整目标区域、适配方式和缩放位置</small>
+              </div>
+              <button type="button" onClick={closeAspectPanel} aria-label="关闭画面比例设置"><X size={20} /></button>
+            </header>
+
+            <div className="aspect-settings-scroll">
+              <section className="aspect-settings-section">
+                <div className="aspect-settings-section-title"><strong>★ 我的常用比例</strong><small>最多固定 6 项，点星标可添加或移除</small></div>
+                {aspectFavorites.length ? (
+                  <div className="aspect-ratio-grid aspect-ratio-grid-favorites">
+                    {aspectFavorites.map(id => aspectOptions.find(item => item.id === id)).filter(Boolean).map(option => renderAspectCard(option, true))}
+                  </div>
+                ) : (
+                  <div className="aspect-settings-empty">还没有常用比例。可在下方数字比例卡片右上角点星标添加。</div>
+                )}
+              </section>
+
+              <section className="aspect-settings-section">
+                <div className="aspect-settings-section-title"><strong>数字比例</strong><small>选择目标视频区域的宽高比</small></div>
+                <div className="aspect-ratio-grid">
+                  {NUMERIC_ASPECT_PRESETS.map(option => renderAspectCard(option))}
+                </div>
+              </section>
+
+              <section className="aspect-settings-section">
+                <div className="aspect-settings-section-title"><strong>其他比例</strong><small>自动匹配视频源，或输入自定义宽高比</small></div>
+                <div className="aspect-ratio-grid aspect-ratio-grid-other">
+                  {OTHER_ASPECT_PRESETS.filter(option => option.id === 'original').map(option => renderAspectCard(option))}
+                  {renderAspectCard({ id: 'custom', label: customRatioLabel, title: `自定义比例 ${customRatioLabel}` })}
+                </div>
+                <div className="aspect-custom-editor">
+                  <div className="aspect-custom-editor-title"><strong>自定义比例</strong><small>输入两个整数，例如 5 : 4 或 2 : 1</small></div>
+                  <div className="aspect-custom-fields">
+                    <label><span>宽度</span><input type="number" min="1" max="10000" step="1" inputMode="numeric" value={customWidth} onChange={event => setCustomWidth(event.target.value)} aria-label="自定义比例宽度" /></label>
+                    <span className="aspect-custom-colon">:</span>
+                    <label><span>高度</span><input type="number" min="1" max="10000" step="1" inputMode="numeric" value={customHeight} onChange={event => setCustomHeight(event.target.value)} aria-label="自定义比例高度" /></label>
+                    <button type="button" onClick={applyCustomAspect}>应用</button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="aspect-settings-section">
+                <div className="aspect-settings-section-title"><strong>画面适配方式</strong><small>决定视频如何填入上方的目标区域</small></div>
+                <div className="aspect-fit-grid">
+                  {FIT_MODE_OPTIONS.map(option => (
+                    <button type="button" key={option.id} className={`aspect-fit-card ${fitMode === option.id ? 'selected' : ''}`} onClick={() => {
+                      setFitMode(option.id);
+                      if (option.id === 'crop' && cropScale === 1) setCropScale(1.15);
+                      setAspectNotice('');
+                    }} aria-pressed={fitMode === option.id}>
+                      <span className={`aspect-fit-preview mode-${option.id}`}><i /><b /><em /></span>
+                      <span className="aspect-fit-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
+                      {fitMode === option.id && <Check size={16} className="aspect-fit-check" />}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {fitMode === 'crop' && (
+                <section className="aspect-settings-section aspect-adjust-section">
+                  <div className="aspect-settings-section-title"><strong>裁剪范围与位置</strong><small>放大画面并拖动预览位置，保留想看的区域</small></div>
+                  <label className="aspect-range-row"><span>裁剪放大</span><input type="range" min="1" max="2.5" step="0.05" value={cropScale} onChange={event => setCropScale(Number(event.target.value))} /><output>{cropScale.toFixed(2)}×</output></label>
+                  <label className="aspect-range-row"><span>水平位置</span><input type="range" min="-45" max="45" step="1" value={videoPan.x} onChange={event => setAspectPanAxis('x', event.target.value)} /><output>{videoPan.x}%</output></label>
+                  <label className="aspect-range-row"><span>垂直位置</span><input type="range" min="-45" max="45" step="1" value={videoPan.y} onChange={event => setAspectPanAxis('y', event.target.value)} /><output>{videoPan.y}%</output></label>
+                  <p className="aspect-settings-hint">也可以在视频上双指缩放、单指拖动调整裁剪区域。</p>
+                </section>
+              )}
+
+              <section className="aspect-settings-section aspect-zoom-section">
+                <div className="aspect-settings-section-title"><strong>锁定比例放大</strong><small>横向和纵向等比例缩放，不会把人物拉宽或压扁</small></div>
+                <button type="button" className={`aspect-zoom-toggle ${lockZoomEnabled ? 'enabled' : ''}`} onClick={() => {
+                  setLockZoomEnabled(value => !value);
+                  setAspectNotice('');
+                }} aria-pressed={lockZoomEnabled}>
+                  <span className="aspect-zoom-toggle-copy"><strong>{lockZoomEnabled ? '已开启锁比例放大' : '关闭锁比例放大'}</strong><small>{lockZoomEnabled ? '当前缩放会应用于三个播放界面' : '开启后可使用滑块或双指手势放大'}</small></span>
+                  <span className="aspect-zoom-switch" aria-hidden="true"><i /></span>
+                </button>
+                <label className={`aspect-range-row ${!lockZoomEnabled ? 'is-disabled' : ''}`}><span>放大倍数</span><input type="range" min="1" max="3" step="0.05" value={lockZoomScale} disabled={!lockZoomEnabled} onChange={event => setLockZoomScale(Number(event.target.value))} /><output>{lockZoomScale.toFixed(2)}×</output></label>
+                {lockZoomEnabled && <>
+                  <label className="aspect-range-row"><span>水平位置</span><input type="range" min="-45" max="45" step="1" value={videoPan.x} onChange={event => setAspectPanAxis('x', event.target.value)} /><output>{videoPan.x}%</output></label>
+                  <label className="aspect-range-row"><span>垂直位置</span><input type="range" min="-45" max="45" step="1" value={videoPan.y} onChange={event => setAspectPanAxis('y', event.target.value)} /><output>{videoPan.y}%</output></label>
+                  <p className="aspect-settings-hint">播放画面支持双指捏合缩放和单指拖动；相同缩放比例会跨主界面、沉浸界面与全屏保留。</p>
+                </>}
+              </section>
+
+              <div className="aspect-settings-footer">
+                {aspectNotice && <p role="status" className="aspect-settings-notice">{aspectNotice}</p>}
+                <button type="button" className="aspect-reset-button" onClick={resetAspectTransform}><RefreshCw size={15} />恢复默认缩放与位置</button>
+                <button type="button" className="aspect-done-button" onClick={closeAspectPanel}>完成</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ), (typeof document !== 'undefined' && document.fullscreenElement) ? document.fullscreenElement : document.body)}
     </div>
   );
 }

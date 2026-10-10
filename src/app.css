@@ -3329,3 +3329,185 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
 .sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen) .live-immersive-bottom-nav button.active {
   color: #5ca9ff !important;
 }
+
+/* Live / video aspect control — one settings sheet shared by embedded, immersive and fullscreen players. */
+.sangtian-window:not(.is-system-fullscreen):not(.is-web-fullscreen):not(.is-immersive):not(.is-landscape) > .sangtian-window-body {
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: var(--aspect-ratio-value, 16 / 9) !important;
+  flex: 0 0 auto;
+}
+.sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen) > .sangtian-window-body.live-immersive-video {
+  aspect-ratio: var(--live-video-ratio, 16 / 9) !important;
+}
+.sangtian-window[data-fit-mode="contain"] .sangtian-video-element { object-fit: contain !important; }
+.sangtian-window[data-fit-mode="crop"] .sangtian-video-element,
+.sangtian-window[data-fit-mode="fill"] .sangtian-video-element { object-fit: cover !important; }
+.sangtian-window[data-fit-mode="stretch"] .sangtian-video-element { object-fit: fill !important; }
+.sangtian-window[data-zoom-enabled="true"] .sangtian-video-element,
+.sangtian-window[data-fit-mode="crop"] .sangtian-video-element {
+  transform: translate(var(--video-pan-x, 0%), var(--video-pan-y, 0%)) scale(var(--video-zoom, 1)) !important;
+  transform-origin: center center;
+}
+.sangtian-window[data-zoom-enabled="true"] .sangtian-video-element,
+.sangtian-window[data-fit-mode="crop"] .sangtian-video-element { touch-action: none; }
+.sangtian-window:is(.is-system-fullscreen, .is-web-fullscreen) > .sangtian-window-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  aspect-ratio: auto !important;
+  overflow: hidden;
+}
+.sangtian-window:is(.is-system-fullscreen, .is-web-fullscreen) .sangtian-video-element {
+  flex: 0 0 auto;
+  width: min(100%, calc(100dvh * var(--aspect-ratio-value, 1.7778))) !important;
+  height: min(100%, calc(100vw / var(--aspect-ratio-value, 1.7778))) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  aspect-ratio: var(--aspect-ratio-value, 16 / 9);
+}
+
+.aspect-sidebar-current { display: flex; flex-direction: column; align-items: stretch; gap: 9px; }
+.aspect-sidebar-current > span { display: flex; align-items: center; gap: 7px; color: #b8c5d8; font-size: 12px; }
+.aspect-sidebar-current .setting-btn { justify-content: center; min-height: 38px; }
+
+.aspect-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100050;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(0, 4, 11, .7);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  color: #eef5ff;
+}
+.aspect-settings-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: min(90dvh, 820px);
+  min-height: 0;
+  border: 1px solid rgba(149, 181, 222, .17);
+  border-bottom: 0;
+  border-radius: 23px 23px 0 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #101d2c 0%, #0a121e 48%, #080d15 100%);
+  box-shadow: 0 -18px 60px rgba(0, 0, 0, .45);
+  animation: aspect-settings-sheet-in .2s ease-out;
+}
+.aspect-settings-grabber { align-self: center; flex: 0 0 auto; width: 38px; height: 4px; margin: 9px 0 0; border-radius: 99px; background: rgba(195, 215, 241, .34); }
+.aspect-settings-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px 13px;
+  margin: 0;
+  border-bottom: 1px solid rgba(150, 182, 220, .13);
+}
+.aspect-settings-header > div { display: flex; flex-direction: column; min-width: 0; gap: 5px; }
+.aspect-settings-header strong { color: #f5f8fd; font-size: 17px; font-weight: 780; }
+.aspect-settings-header small { color: #91a7c1; font-size: 11px; line-height: 1.4; }
+.aspect-settings-header > button { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(155, 184, 220, .12); border-radius: 11px; color: #c7d8ee; background: rgba(255, 255, 255, .06); }
+.aspect-settings-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 0 14px calc(15px + env(safe-area-inset-bottom, 0px)); }
+.aspect-settings-section { padding: 15px 0 1px; }
+.aspect-settings-section + .aspect-settings-section { margin-top: 12px; border-top: 1px solid rgba(144, 177, 216, .1); }
+.aspect-settings-section-title { display: flex; flex-direction: column; gap: 4px; margin: 0 1px 10px; }
+.aspect-settings-section-title strong { color: #e8f2ff; font-size: 13px; font-weight: 760; }
+.aspect-settings-section-title small { color: #8199b4; font-size: 10px; line-height: 1.4; }
+.aspect-ratio-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.aspect-ratio-card { position: relative; min-width: 0; min-height: 86px; overflow: hidden; border: 1px solid rgba(146, 178, 215, .14); border-radius: 13px; background: rgba(255, 255, 255, .035); transition: border-color .15s, background .15s; }
+.aspect-ratio-card.selected { border-color: #d5a55a; background: linear-gradient(145deg, rgba(213, 165, 90, .15), rgba(37, 71, 106, .18)); box-shadow: inset 0 0 0 1px rgba(213, 165, 90, .12); }
+.aspect-ratio-card.compact { min-height: 78px; }
+.aspect-ratio-select { display: flex; width: 100%; min-height: inherit; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px 24px 8px 7px; color: #b5c8df; text-align: center; }
+.aspect-ratio-select strong { max-width: 100%; color: #c6d6e9; font-size: 11px; line-height: 1.2; font-weight: 700; overflow-wrap: anywhere; }
+.aspect-ratio-card.selected .aspect-ratio-select strong { color: #ffe3ae; }
+.aspect-ratio-shape-wrap { display: flex; height: 40px; width: 100%; align-items: center; justify-content: center; }
+.aspect-ratio-shape { display: block; max-width: 42px; max-height: 40px; border: 1.7px solid #7eaee8; border-radius: 3px; background: linear-gradient(135deg, rgba(75, 153, 239, .19), rgba(75, 153, 239, .035)); box-shadow: 0 0 10px rgba(80, 153, 235, .06); }
+.aspect-ratio-card.selected .aspect-ratio-shape { border-color: #e6b969; background: rgba(213, 165, 90, .12); }
+.aspect-favorite-toggle { position: absolute; top: 4px; right: 4px; display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; color: #657d99; background: rgba(1, 7, 14, .44); }
+.aspect-favorite-toggle.is-favorite { color: #eab85f; }
+.aspect-ratio-selected-check { position: absolute; bottom: 7px; left: 7px; color: #eab85f; }
+.aspect-settings-empty { padding: 12px; border: 1px dashed rgba(145, 177, 214, .2); border-radius: 11px; color: #91a6bf; font-size: 11px; line-height: 1.5; }
+.aspect-custom-editor { margin-top: 10px; padding: 12px; border: 1px solid rgba(143, 176, 215, .12); border-radius: 13px; background: rgba(2, 8, 15, .25); }
+.aspect-custom-editor-title { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.aspect-custom-editor-title strong { font-size: 11px; color: #c8d9ed; }
+.aspect-custom-editor-title small { font-size: 10px; color: #8097b1; }
+.aspect-custom-fields { display: grid; grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.aspect-custom-fields label { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: #8298b1; font-size: 10px; }
+.aspect-custom-fields input { min-width: 0; width: 100%; min-height: 40px; padding: 0 10px; border: 1px solid rgba(147, 179, 217, .16); border-radius: 9px; outline: none; color: #f0f6ff; background: rgba(255, 255, 255, .045); font: inherit; font-size: 13px; }
+.aspect-custom-fields input:focus { border-color: rgba(90, 161, 239, .7); }
+.aspect-custom-colon { display: grid; min-height: 40px; place-items: center; color: #8298b1; font-size: 14px; }
+.aspect-custom-fields > button { min-height: 40px; padding: 0 14px; border-radius: 10px; color: #20180d; background: #e0b366; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.aspect-fit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.aspect-fit-card { display: flex; min-width: 0; min-height: 82px; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(145, 176, 214, .14); border-radius: 13px; text-align: left; background: rgba(255, 255, 255, .03); color: #c2d2e6; }
+.aspect-fit-card.selected { border-color: #d5a55a; background: rgba(213, 165, 90, .1); }
+.aspect-fit-preview { position: relative; display: block; flex: 0 0 39px; width: 39px; height: 31px; overflow: hidden; border: 1px solid #7da8d8; border-radius: 4px; background: rgba(80, 137, 197, .08); }
+.aspect-fit-preview i { position: absolute; inset: 4px 6px; border: 1px solid rgba(135, 185, 238, .7); border-radius: 1px; }
+.aspect-fit-preview b { position: absolute; left: 11px; top: 9px; width: 14px; height: 9px; background: rgba(90, 160, 233, .32); }
+.aspect-fit-preview em { position: absolute; right: 3px; top: 3px; width: 1px; height: 23px; background: rgba(140, 183, 232, .55); }
+.aspect-fit-preview.mode-contain { background: repeating-linear-gradient(90deg, rgba(70, 105, 145, .12) 0 5px, transparent 5px 10px); }
+.aspect-fit-preview.mode-crop { border-color: #e1b66c; }
+.aspect-fit-preview.mode-crop i { inset: -2px 1px; border-color: #e1b66c; }
+.aspect-fit-preview.mode-crop em { right: -2px; }
+.aspect-fit-preview.mode-fill i { inset: 0; border: 0; background: rgba(87, 157, 230, .25); }
+.aspect-fit-preview.mode-fill b { left: 0; right: 0; top: 10px; width: auto; height: 1px; background: #a1c7f5; }
+.aspect-fit-preview.mode-stretch { border-color: #d1a7ef; }
+.aspect-fit-preview.mode-stretch i { inset: 0; border: 0; background: rgba(177, 115, 228, .22); }
+.aspect-fit-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.aspect-fit-copy strong { color: #e4eefb; font-size: 12px; }
+.aspect-fit-copy small { color: #849cb8; font-size: 9px; line-height: 1.4; }
+.aspect-fit-check { flex: 0 0 auto; color: #e5b967; }
+.aspect-range-row { display: grid; grid-template-columns: 66px minmax(0, 1fr) 46px; align-items: center; gap: 10px; min-height: 38px; color: #adbed3; font-size: 11px; }
+.aspect-range-row input[type="range"] { width: 100%; min-width: 0; accent-color: #dfb263; }
+.aspect-range-row output { color: #edca8b; text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
+.aspect-range-row.is-disabled { opacity: .45; }
+.aspect-settings-hint { margin: 5px 0 3px; color: #7f98b3; font-size: 10px; line-height: 1.5; }
+.aspect-zoom-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding: 11px 12px; border: 1px solid rgba(143, 177, 219, .14); border-radius: 12px; text-align: left; background: rgba(255, 255, 255, .035); }
+.aspect-zoom-toggle.enabled { border-color: rgba(213, 165, 90, .55); background: rgba(213, 165, 90, .09); }
+.aspect-zoom-toggle-copy { display: flex; flex-direction: column; gap: 4px; }
+.aspect-zoom-toggle-copy strong { color: #e0ebf8; font-size: 12px; }
+.aspect-zoom-toggle-copy small { color: #859db7; font-size: 10px; line-height: 1.4; }
+.aspect-zoom-switch { display: flex; flex: 0 0 39px; align-items: center; width: 39px; height: 23px; padding: 3px; border-radius: 999px; background: #394657; transition: background .16s; }
+.aspect-zoom-switch i { display: block; width: 17px; height: 17px; border-radius: 50%; background: #dbe5f1; transition: transform .16s; }
+.aspect-zoom-toggle.enabled .aspect-zoom-switch { background: #c89b50; }
+.aspect-zoom-toggle.enabled .aspect-zoom-switch i { transform: translateX(16px); background: #fff6e5; }
+.aspect-settings-footer { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 9px; padding-top: 14px; margin-top: 12px; border-top: 1px solid rgba(145, 176, 215, .12); }
+.aspect-settings-notice { grid-column: 1 / -1; margin: 0; color: #e5bd75; font-size: 10px; line-height: 1.4; }
+.aspect-reset-button, .aspect-done-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 0 12px; border-radius: 11px; font-size: 11px; font-weight: 750; }
+.aspect-reset-button { color: #bed0e5; border: 1px solid rgba(145, 176, 215, .17); background: rgba(255, 255, 255, .04); }
+.aspect-done-button { min-width: 90px; color: #1b160d; background: #e0b366; }
+.live-immersive-ratio-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 11px; border: 1px solid rgba(213, 165, 90, .28); border-radius: 11px; color: #f1d09a; background: rgba(213, 165, 90, .09); font-size: 12px; font-weight: 700; white-space: nowrap; }
+@keyframes aspect-settings-sheet-in { from { transform: translateY(18px); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
+@media (orientation: landscape) and (min-width: 560px) {
+  .aspect-settings-backdrop { align-items: center; padding: 14px; }
+  .aspect-settings-sheet { width: min(760px, calc(100vw - 28px)); max-height: 92dvh; border-bottom: 1px solid rgba(149, 181, 222, .17); border-radius: 20px; }
+  .aspect-settings-grabber { display: none; }
+  .aspect-settings-scroll { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; }
+  .aspect-settings-section { align-self: start; }
+  .aspect-settings-section:nth-child(1), .aspect-settings-section:nth-child(2), .aspect-settings-section:nth-child(3) { grid-column: 1; }
+  .aspect-settings-section:nth-child(4), .aspect-settings-section:nth-child(5), .aspect-settings-footer { grid-column: 2; }
+  .aspect-settings-section + .aspect-settings-section { margin-top: 10px; }
+}
+@media (max-width: 360px) {
+  .aspect-settings-scroll { padding-right: 10px; padding-left: 10px; }
+  .aspect-ratio-grid, .aspect-ratio-grid-favorites { gap: 6px; }
+  .aspect-ratio-card { min-height: 81px; }
+  .aspect-fit-card { gap: 7px; padding: 8px; }
+  .aspect-fit-preview { flex-basis: 32px; width: 32px; }
+  .aspect-range-row { grid-template-columns: 58px minmax(0, 1fr) 42px; gap: 7px; }
+  .aspect-reset-button, .aspect-done-button { font-size: 10px; padding: 0 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .aspect-settings-sheet, .aspect-zoom-switch, .aspect-zoom-switch i { animation: none; transition: none; } }
+/* Immersive Live has intentionally stronger legacy player selectors; explicitly honor the selected fit mode there too. */
+.sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="contain"] .live-immersive-video .sangtian-video-element { object-fit: contain !important; }
+.sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="crop"] .live-immersive-video .sangtian-video-element,
+.sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="fill"] .live-immersive-video .sangtian-video-element { object-fit: cover !important; }
+.sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="stretch"] .live-immersive-video .sangtian-video-element { object-fit: fill !important; }
