@@ -177,13 +177,16 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
     playback:{...playback,...patch,decoder:{...(playback.decoder??{}),...(patch.decoder??{})}},
   });
   const availableSchemes=(scope)=>isAndroidPlayback
-    ? PLAYBACK_SCHEMES.filter(item=>['html5_auto',scope==='live'?'hls_lowlatency':'hls_worker','html5_hardware'].includes(item.id))
+    ? PLAYBACK_SCHEMES.filter(item => scope === 'live'
+        ? ['ijk_hardware','ijk_software','exo_hardware','exo_software','html5_auto','hls_lowlatency','html5_hardware'].includes(item.id)
+        : ['html5_auto','hls_worker','html5_hardware'].includes(item.id))
     : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android');
   const resolveScheme=(scope)=>{
     const saved=playback[scope+'PlaybackScheme'];
     const legacy=getPlaybackSchemeId(playback[scope+'Player']||'ijk',playback.decoder?.[playback[scope+'Player']||'ijk']||'hardware');
     const allowed=availableSchemes(scope);
-    const desired=isAndroidPlayback?(allowed.some(item=>item.id===saved)?saved:'html5_auto'):(saved||legacy);
+    const defaultAndroidScheme = scope === 'live' ? 'ijk_hardware' : 'html5_auto';
+    const desired=isAndroidPlayback?(allowed.some(item=>item.id===saved)?saved:defaultAndroidScheme):(saved||legacy);
     return allowed.find(item=>item.id===desired)||allowed[0]||getPlaybackScheme('html5_auto');
   };
   const applyScheme=(scope, schemeId)=>{
@@ -208,11 +211,11 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
    <SettingMenu icon={Radio} title="失败自动切换" value={playback.fallbackEnabled===false?'关闭':'开启'} onClick={()=>updatePlayback({fallbackEnabled:playback.fallbackEnabled===false})}/>
    {!isAndroidPlayback&&<SettingMenu icon={Radio} title="切换顺序" value={order} onClick={()=>updatePlayback({fallbackOrder:rotateOrder(playback.fallbackOrder)})}/>}
    <InfoCard title="可选播放方案" text={isAndroidPlayback
-     ? 'HTML5 自动适配 · HLS.js/MSE · HTML5 原生媒体优先。三种方案都在当前页面的视频元素内部输出画面，不创建独立原生视频层；失败后可按协议尝试本地备用策略和线路。'
+     ? 'Android Live 可使用独立 IJKPlayer / ExoPlayer，并分别选择硬件或软件解码；HTML5 自动适配、HLS.js/MSE 与 HTML5 原生媒体仍可作为直播备选。影视点播继续使用页面内 HTML 视频播放路径。'
      : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android').map(item=>item.label).join(' · ') + '。普通手机浏览器使用 HLS.js 或 HTML5 原生媒体，不调用 Android 原生视频引擎。'}/>
    <SectionTitle title="解码设置"/>
-   <InfoCard title={isAndroidPlayback?'页面内播放策略':'浏览器播放方案'} text={isAndroidPlayback
-     ? 'HTML5 自动适配会根据视频源尝试原生媒体、HLS.js/MSE 和 MPEG-TS；HLS.js/MSE 可在浏览器允许范围内添加安全请求头。IJKPlayer / ExoPlayer 不再作为 Android 用户可选的视频输出内核。'
+   <InfoCard title={isAndroidPlayback?'Live 与点播解码范围':'浏览器播放方案'} text={isAndroidPlayback
+     ? 'Android Live 播放器与解码方式请在直播主界面或沉浸播放界面的“直播配置”中选择；IJK/Exo 独立于通用原生播放器。影视点播仍走内嵌 HTML5/HLS 路径，不受 Live 专用播放器影响。'
      : '普通手机浏览器使用其 HTML5 视频解码能力与 HLS.js/MSE 路径，实际能力取决于浏览器和源站的媒体格式、跨域与请求头策略。'}/>
    <SectionTitle title="线路设置"/>
    <SettingMenu icon={Radio} title="默认影视线路" value={sourceSettingLabel(sources,'movie',settings?.defaultMovieSource)} onClick={()=>onUpdateSettings?.({defaultMovieSource:nextSource(sources,'movie',settings?.defaultMovieSource)})}/>
