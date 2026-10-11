@@ -1,6 +1,6 @@
 {
   "project_root": "/app/applet",
-  "generated_at_utc": "2026-10-11T23:10:22.073803+00:00",
+  "generated_at_utc": "2026-10-11T23:17:38.556168+00:00",
   "mode": "static checks; optional standalone APK build only when explicitly requested",
   "counts": {
     "PASS": 27,

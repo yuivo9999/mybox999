@@ -1,6 +1,6 @@
 MyBox 测试检查报告
 项目根目录：/app/applet
-生成时间（UTC）：2026-10-11T23:10:22.073803+00:00
+生成时间（UTC）：2026-10-11T23:17:38.556168+00:00
 汇总：PASS=27 WARN=1 FAIL=0 BLOCKED=0 UNVERIFIED=2
 
 [PASS] frontend / package.json/JSON: package.json 可解析。
