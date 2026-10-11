@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, startTransiti
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CircleDot,
   Film,
   Globe,
@@ -235,6 +236,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const [showCustomUrl, setShowCustomUrl] = useState(false);
   const [showLiveMenu, setShowLiveMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isCurrentBarExpanded, setIsCurrentBarExpanded] = useState(false);
 
   useEffect(() => {
     if (!showCustomUrl) return undefined;
@@ -980,7 +982,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
       )}
 
       <section className="live-channel-board" id="live-channel-board" aria-label="直播频道与选台">
-      <div className="live-current-bar" aria-label="当前直播与沉浸播放入口">
+      <div className={`live-current-bar ${isCurrentBarExpanded ? 'is-expanded' : 'is-collapsed'}`} aria-label="当前直播与沉浸播放入口">
         <div className="live-current-header">
           <div className="live-current-info">
             <span className="live-pill">{activeChannel ? '● 正在直播' : '● 信号待接入'}</span>
@@ -1014,30 +1016,45 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
               <Play size={14} />
               <span>沉浸播放</span>
             </button>
+            <button
+              type="button"
+              className="live-current-expand"
+              onClick={() => setIsCurrentBarExpanded(value => !value)}
+              aria-expanded={isCurrentBarExpanded}
+              aria-controls="live-current-details"
+              aria-label={isCurrentBarExpanded ? '收起线路与播放地址' : '展开线路与播放地址'}
+              title={isCurrentBarExpanded ? '收起线路与播放地址' : '展开线路与播放地址'}
+            >
+              <ChevronDown size={17} aria-hidden="true" />
+            </button>
           </div>
         </div>
 
-        {activeChannel?.streams?.length > 1 && (
-          <div className="live-stream-switcher">
-            <span className="switcher-label">线路 ({activeChannel.streams.length}):</span>
-            <div className="switcher-pills">
-              {activeChannel.streams.map((stream, index) => (
-                <button
-                  key={stream.streamId || index}
-                  type="button"
-                  className={`switcher-pill ${activeStreamIndex === index ? 'active' : ''}`}
-                  onClick={() => handleSwitchStream(index)}
-                >
-                  {stream.label || '线路 ' + (index + 1)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {activeChannel && (
-          <div className="live-stream-address" aria-label="当前频道播放地址">
-            <span className="live-stream-address-label">播放地址</span>
-            <code>{activePlaybackAddress || (streamLoading ? '正在读取播放地址…' : '暂无可用播放地址')}</code>
+        {isCurrentBarExpanded && (
+          <div id="live-current-details" className="live-current-details">
+            {activeChannel?.streams?.length > 1 && (
+              <div className="live-stream-switcher">
+                <span className="switcher-label">线路 ({activeChannel.streams.length}):</span>
+                <div className="switcher-pills">
+                  {activeChannel.streams.map((stream, index) => (
+                    <button
+                      key={stream.streamId || index}
+                      type="button"
+                      className={`switcher-pill ${activeStreamIndex === index ? 'active' : ''}`}
+                      onClick={() => handleSwitchStream(index)}
+                    >
+                      {stream.label || '线路 ' + (index + 1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeChannel && (
+              <div className="live-stream-address" aria-label="当前频道播放地址">
+                <span className="live-stream-address-label">播放地址</span>
+                <code>{activePlaybackAddress || (streamLoading ? '正在读取播放地址…' : '暂无可用播放地址')}</code>
+              </div>
+            )}
           </div>
         )}
       </div>

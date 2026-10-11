@@ -116,6 +116,7 @@ export function SangtianPlayerWindow({
     return FIT_MODE_OPTIONS.some(item => item.id === saved) ? saved : (isLive ? 'contain' : 'fill');
   });
   const [showAspectPanel, setShowAspectPanel] = useState(false);
+  const [showMiniAspectPicker, setShowMiniAspectPicker] = useState(false);
   const [aspectNotice, setAspectNotice] = useState('');
   const [customWidth, setCustomWidth] = useState(() => String(readStoredValue(`${aspectStoragePrefix}.customWidth`, 5)));
   const [customHeight, setCustomHeight] = useState(() => String(readStoredValue(`${aspectStoragePrefix}.customHeight`, 4)));
@@ -160,9 +161,44 @@ export function SangtianPlayerWindow({
   const [liveWatchSeconds, setLiveWatchSeconds] = useState(0);
   const liveWatchSecondsRef = useRef(0);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
+  const [playerBodySize, setPlayerBodySize] = useState({ width: 0, height: 0 });
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine !== false);
   const lastWatchChannelKeyRef = useRef('');
   const [isStoppedManually, setIsStoppedManually] = useState(false);
+
+  useEffect(() => {
+    if (!isLive) return undefined;
+    const body = videoContainerRef?.current;
+    if (!body) return undefined;
+
+    const updateSize = () => {
+      const width = Math.max(0, Math.round(body.clientWidth));
+      const height = Math.max(0, Math.round(body.clientHeight));
+      setPlayerBodySize(current => (
+        current.width === width && current.height === height
+          ? current
+          : { width, height }
+      ));
+    };
+
+    updateSize();
+    let observer = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateSize);
+      observer.observe(body);
+    }
+    window.addEventListener('resize', updateSize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [isLive, videoContainerRef]);
+
+  useEffect(() => {
+    if (isImmersive || isSystemFullscreen || isWebFullscreen) {
+      setShowMiniAspectPicker(false);
+    }
+  }, [isImmersive, isSystemFullscreen, isWebFullscreen]);
 
   useEffect(() => {
     setIsStoppedManually(false);
@@ -342,6 +378,7 @@ export function SangtianPlayerWindow({
   const selectAspectPreset = (id) => {
     setAspectMode(id);
     setAspectNotice('');
+    setShowMiniAspectPicker(false);
     if (id === 'custom') {
       const width = Number(customWidth);
       const height = Number(customHeight);
@@ -564,6 +601,11 @@ export function SangtianPlayerWindow({
         setShowFullscreenBar(true);
         return;
       }
+      if (showMiniAspectPicker) {
+        event.preventDefault();
+        setShowMiniAspectPicker(false);
+        return;
+      }
       if (document.fullscreenElement) return;
       if (isLive && immersiveRef.current && immersiveMenu) {
         event.preventDefault();
@@ -586,7 +628,7 @@ export function SangtianPlayerWindow({
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isLive, showAspectPanel, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
+  }, [isLive, showAspectPanel, showMiniAspectPicker, immersiveMenu, showLeftSidebar, showRightSidebar, showEpisodeSidebar]);
 
   // 直播：沉浸状态由父级 isImmersive 统一驱动，关闭沉浸时同步收起 web 全屏
   useEffect(() => {
@@ -596,6 +638,23 @@ export function SangtianPlayerWindow({
   // Live 的竖屏沉浸是完整页面；只有真正的系统/网页全屏才使用全屏覆盖控制。
   const immersiveLivePage = Boolean(isLive && isImmersive && !isSystemFullscreen && !isWebFullscreen);
   const fullscreen = isSystemFullscreen || isWebFullscreen || (isImmersive && !isLive);
+  const isEmbeddedLivePlayer = isLive && !fullscreen && !immersiveLivePage;
+  const embeddedLiveCanvasStyle = (() => {
+    const width = Number(playerBodySize.width);
+    const height = Number(playerBodySize.height);
+    if (!(width > 0 && height > 0)) {
+      return { width: '100%', height: '100%', aspectRatio: `${currentAspectRatio}` };
+    }
+    // Keep the player frame fixed at 16:9, and center a ratio-specific canvas inside it.
+    // This avoids tall portrait presets expanding the page or pushing video toward a corner.
+    const canvasWidth = Math.min(width, height * currentAspectRatio);
+    const canvasHeight = Math.min(height, width / currentAspectRatio);
+    return {
+      width: `${Math.max(1, canvasWidth)}px`,
+      height: `${Math.max(1, canvasHeight)}px`,
+      aspectRatio: `${currentAspectRatio}`,
+    };
+  })();
   const showLivePlaybackNav = fullscreen ? showFullscreenBar : (immersiveLivePage ? showImmersivePlaybackNav : showEmbeddedNav);
   fullscreenRef.current = fullscreen;
 
@@ -1123,29 +1182,54 @@ export function SangtianPlayerWindow({
             </div>
           )}
           <div className="sangtian-window-actions">
-            <button
-              className="sangtian-window-btn"
-              onClick={() => {
-                setIsStoppedManually(true);
-                onStop?.();
-              }}
-              title="停止播放"
-            >
-              <Square size={13}/>
-              <span>停止</span>
-            </button>
-            <button className="sangtian-window-btn" onClick={handleCopyLink} title="复制播放链接">
-              {copied ? <Check size={13}/> : <Copy size={13}/>}
-              <span>{copied ? '已复制' : '复制'}</span>
-            </button>
-            {!isLive && (
-              <button className={`sangtian-window-btn ${isLandscape ? 'active' : ''}`} onClick={handleToggleLandscape} title="方向">
-                <RotateCw size={13}/>
-                <span>{isLandscape ? '竖屏' : '横屏'}</span>
-              </button>
-            )}
-            {!isLive && (
+            {isLive ? (
               <>
+                <button
+                  type="button"
+                  className={`sangtian-window-btn ${showMiniAspectPicker ? 'active' : ''}`}
+                  onClick={event => {
+                    event.stopPropagation();
+                    setShowMiniAspectPicker(value => !value);
+                  }}
+                  aria-expanded={showMiniAspectPicker}
+                  aria-label="选择视频比例"
+                  title="比例"
+                >
+                  <Ratio size={14}/>
+                  <span>比例</span>
+                </button>
+                <button
+                  type="button"
+                  className="sangtian-window-btn"
+                  onClick={handleToggleFullscreen}
+                  aria-label="全屏播放"
+                  title="全屏"
+                >
+                  <Maximize2 size={14}/>
+                  <span>全屏</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="sangtian-window-btn"
+                  onClick={() => {
+                    setIsStoppedManually(true);
+                    onStop?.();
+                  }}
+                  title="停止播放"
+                >
+                  <Square size={13}/>
+                  <span>停止</span>
+                </button>
+                <button className="sangtian-window-btn" onClick={handleCopyLink} title="复制播放链接">
+                  {copied ? <Check size={13}/> : <Copy size={13}/>}
+                  <span>{copied ? '已复制' : '复制'}</span>
+                </button>
+                <button className={`sangtian-window-btn ${isLandscape ? 'active' : ''}`} onClick={handleToggleLandscape} title="方向">
+                  <RotateCw size={13}/>
+                  <span>{isLandscape ? '竖屏' : '横屏'}</span>
+                </button>
                 <button className={`sangtian-window-btn ${showAspectPanel ? 'active' : ''}`} onClick={openAspectPanel} title="画面比例与缩放">
                   <Ratio size={13}/>
                   <span>比例</span>
@@ -1156,6 +1240,41 @@ export function SangtianPlayerWindow({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {isLive && showMiniAspectPicker && !fullscreen && !immersiveLivePage && (
+        <div
+          className="live-mini-aspect-picker"
+          role="dialog"
+          aria-label="快速选择画面比例"
+          onClick={event => event.stopPropagation()}
+        >
+          <div className="live-mini-aspect-header">
+            <strong>画面比例</strong>
+            <button type="button" onClick={() => setShowMiniAspectPicker(false)} aria-label="关闭比例选择"><X size={15} /></button>
+          </div>
+          <div className="live-mini-aspect-options">
+            {aspectOptions.filter(option => option.id !== 'custom').map(option => (
+              <button
+                type="button"
+                key={option.id}
+                className={aspectMode === option.id ? 'active' : ''}
+                onClick={() => selectAspectPreset(option.id)}
+                aria-pressed={aspectMode === option.id}
+                title={option.title}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="live-mini-aspect-more"
+            onClick={() => { setShowMiniAspectPicker(false); openAspectPanel(); }}
+          >
+            更多比例与适配设置
+          </button>
         </div>
       )}
 
@@ -1185,7 +1304,7 @@ export function SangtianPlayerWindow({
           ? handleImmersiveLiveBlankClick
           : (isLive && !fullscreen && !showTerminal && status === 'error' ? handleEmbeddedBlankClick : undefined)}
         style={{
-          aspectRatio: fullscreen ? undefined : `${currentAspectRatio}`,
+          aspectRatio: fullscreen ? undefined : (isEmbeddedLivePlayer ? '16 / 9' : `${currentAspectRatio}`),
           '--live-video-ratio': currentAspectRatio,
         }}
       >
@@ -1211,7 +1330,11 @@ export function SangtianPlayerWindow({
           </div>
         ) : (
           <>
-            {renderedChildren}
+            {isEmbeddedLivePlayer ? (
+              <div className="live-embedded-video-canvas" style={embeddedLiveCanvasStyle}>
+                {renderedChildren}
+              </div>
+            ) : renderedChildren}
             {(() => {
               const isStopped = isStoppedManually || status === 'stopped';
               if (isStopped) {
@@ -1394,7 +1517,7 @@ export function SangtianPlayerWindow({
             )}
 
             {/* Embedded Navigation Bar inside Video Window (Non-fullscreen) */}
-            {!fullscreen && !immersiveLivePage && !showTerminal && status !== 'error' && (
+            {!isLive && !fullscreen && !immersiveLivePage && !showTerminal && status !== 'error' && (
               <div
                 className={`sangtian-embedded-player-nav ${isLandscape ? 'mode-landscape' : 'mode-portrait'} ${showEmbeddedNav ? 'visible' : ''}`}
                 onClick={handleEmbeddedBlankClick}

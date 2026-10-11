@@ -3991,3 +3991,253 @@ html.android-live-native-active #root,
 .theme-sangtian .live-home-page .live-channel-brand-word span{color:#ca3c35}.theme-sangtian .live-home-page .live-channel-brand-word i{font-style:normal;color:#302a23}.theme-sangtian .live-home-page .live-channel-brand-word b{margin-left:2px;padding-left:2px;border-left:1px solid #c9bba3;color:#2b241c;font-size:13px;letter-spacing:-.04em}
 .theme-sangtian .live-home-page .live-channel-brand-mark small{display:block;margin:0;color:#d6c6a7;font-size:8px;letter-spacing:.08em;white-space:nowrap}
 .theme-sangtian .live-home-page .live-channel-arrow{flex:0 0 auto;color:#9d896c;margin-left:-4px}
+
+/* Live main page layout: keep the header, player, current-channel card and guide tabs stationary. */
+.page.live-home-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: max(0px, env(safe-area-inset-top, 0px)) 0 calc(70px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.page.live-home-page > .live-home-topbar {
+  flex: 0 0 auto;
+  margin: 0;
+  position: relative;
+  z-index: 40;
+}
+.page.live-home-page > .live-home-custom-url,
+.page.live-home-page > .sangtian-window,
+.page.live-home-page > [role="status"] {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.page.live-home-page > .sangtian-window {
+  position: relative;
+  min-height: 0;
+}
+.page.live-home-page > .live-channel-board {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.page.live-home-page .live-current-bar,
+.page.live-home-page .live-channel-board-heading,
+.page.live-home-page .live-category-tabs-container,
+.page.live-home-page > .live-channel-board > .info-card,
+.page.live-home-page > .live-channel-board > .state-view {
+  flex: 0 0 auto;
+}
+.page.live-home-page .live-channel-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 0 2px 8px;
+  touch-action: pan-y;
+}
+.page.live-home-page .live-category-tabs-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 0 0 auto;
+  touch-action: pan-x;
+}
+
+/* The current-channel card remains visible while its optional route details are folded. */
+.page.live-home-page .live-current-bar {
+  flex-shrink: 0;
+}
+.page.live-home-page .live-current-bar.is-collapsed {
+  gap: 0;
+}
+.page.live-home-page .live-current-actions {
+  gap: 6px;
+}
+.page.live-home-page .live-current-expand {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(213, 181, 117, .34);
+  border-radius: 10px;
+  color: #e2cca0;
+  background: rgba(255, 255, 255, .035);
+}
+.page.live-home-page .live-current-expand svg {
+  transition: transform .16s ease;
+}
+.page.live-home-page .live-current-bar.is-expanded .live-current-expand svg {
+  transform: rotate(180deg);
+}
+.page.live-home-page .live-current-details {
+  min-width: 0;
+}
+.page.live-home-page .live-current-bar .live-stream-address code {
+  max-height: 4.4em;
+  overflow: auto;
+}
+
+/* Main live window: stable frame, centered ratio-specific video canvas, compact quick-ratio panel. */
+.page.live-home-page > .sangtian-window.is-live-direct:not(.is-immersive):not(.is-system-fullscreen):not(.is-web-fullscreen) > .sangtian-window-body {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 16 / 9 !important;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+.page.live-home-page > .sangtian-window.is-live-direct:not(.is-immersive):not(.is-system-fullscreen):not(.is-web-fullscreen) .live-embedded-video-canvas {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+.page.live-home-page > .sangtian-window.is-live-direct:not(.is-immersive):not(.is-system-fullscreen):not(.is-web-fullscreen) .live-embedded-video-canvas > .sangtian-video-element {
+  display: block;
+  flex: 0 0 auto;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  margin: 0 auto;
+}
+.page.live-home-page > .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar {
+  position: relative;
+  z-index: 35;
+}
+.page.live-home-page > .sangtian-window.is-live-direct .live-mini-aspect-picker {
+  position: absolute;
+  z-index: 80;
+  top: 40px;
+  right: 8px;
+  width: min(286px, calc(100% - 16px));
+  padding: 10px;
+  border: 1px solid #876a40;
+  border-radius: 14px;
+  color: #f2e4ca;
+  background: linear-gradient(155deg, rgba(46, 34, 23, .98), rgba(25, 19, 14, .98));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .46);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.live-mini-aspect-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #f5e8cd;
+  font-size: 12px;
+}
+.live-mini-aspect-header button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(221, 192, 140, .18);
+  border-radius: 8px;
+  color: #d4c09e;
+  background: rgba(255, 255, 255, .045);
+}
+.live-mini-aspect-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.live-mini-aspect-options button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 1px solid rgba(221, 192, 140, .17);
+  border-radius: 8px;
+  color: #d7c5a8;
+  background: rgba(255, 255, 255, .035);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.live-mini-aspect-options button.active {
+  border-color: #d6b675;
+  color: #261b10;
+  background: linear-gradient(145deg, #e3c989, #b79251);
+  font-weight: 800;
+}
+.live-mini-aspect-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 6px 2px;
+  border-top: 1px solid rgba(221, 192, 140, .14);
+  color: #c9ae7d;
+  font-size: 11px;
+  text-align: center;
+}
+.page.live-home-page .sangtian-window.is-live-direct .live-playback-nav {
+  z-index: 25;
+}
+@media (max-height: 640px) {
+  .page.live-home-page > .sangtian-window {
+    margin-top: 5px;
+    margin-bottom: 6px;
+  }
+  .page.live-home-page .live-current-bar {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .page.live-home-page .live-current-bar .live-channel-meta {
+    display: none;
+  }
+  .page.live-home-page .live-channel-board {
+    padding-top: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page.live-home-page .live-current-expand svg {
+    transition: none;
+  }
+}
+
+/* Final live layout overrides: match the fixed viewport and keep the two player actions labeled on phones. */
+.theme-sangtian .page.live-home-page {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 560px) {
+  .page.live-home-page > .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-btn span {
+    display: inline !important;
+  }
+  .page.live-home-page > .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-btn {
+    min-width: 0;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+}
