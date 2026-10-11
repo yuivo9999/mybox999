@@ -8,6 +8,9 @@ def ensure_page_loaded(page):
     assert not navigation.get("error"), f"页面导航失败：{navigation.get('error')}"
     assert navigation.get("status") is not None, f"未收到 HTTP 响应：{navigation}"
     assert int(navigation["status"]) < 400, f"页面返回错误 HTTP 状态：{navigation}"
+    assert not page._ai_visual_events.get("setup_error"), (
+        "页面启动动作/就绪状态失败：" + str(page._ai_visual_events.get("setup_error"))
+    )
 
 
 def test_page_is_reachable_and_screenshot_is_saved(page):
@@ -46,6 +49,35 @@ def test_horizontal_overflow_for_configured_viewports(page, visual_config):
     assert not problems, "检测到视口横向溢出：\n" + "\n".join(str(problem) for problem in problems)
 
 
+
+def test_configured_elements_fit_viewport_horizontally(page, visual_config):
+    ensure_page_loaded(page)
+    selectors = visual_config.get("geometry_selectors", [])
+    if not selectors:
+        pytest.skip("没有配置 geometry_selectors；请为目标页面配置需要检查几何范围的组件")
+    viewport_width = page.evaluate("window.innerWidth")
+    problems = []
+    for selector in selectors:
+        locator = page.locator(selector).first
+        if locator.count() < 1:
+            problems.append({"selector": selector, "error": "元素不存在"})
+            continue
+        box = locator.bounding_box()
+        if box is None:
+            problems.append({"selector": selector, "error": "元素不可测量或不可见"})
+            continue
+        left = float(box["x"])
+        right = left + float(box["width"])
+        if left < -2 or right > viewport_width + 2:
+            problems.append({
+                "selector": selector,
+                "x": round(left, 2),
+                "width": round(float(box["width"]), 2),
+                "right": round(right, 2),
+                "viewport_width": viewport_width,
+            })
+    assert not problems, "以下关键组件的边界超出视口或无法测量：\n" + "\n".join(str(item) for item in problems)
+
 def test_visible_buttons_have_accessible_names(page, visual_config):
     ensure_page_loaded(page)
     if not visual_config.get("check_button_names", False):
@@ -70,6 +102,25 @@ def test_configured_interactions(page, visual_config):
         # hiding the navigation bar or opening a modal) cannot contaminate the next.
         response = page.goto(visual_config.get("base_url", "http://127.0.0.1:4173/"), wait_until="domcontentloaded", timeout=int(visual_config.get("navigation_timeout_ms", 15000)))
         assert response is not None and response.status < 400, f"场景 {item.get('name', index)} 的页面重载失败"
+        # Recreate the configured state after each reload (e.g. open the actual LIVE tab).
+        for action in visual_config.get("startup_actions", []):
+            action_type = action.get("type", "click")
+            if action.get("role"):
+                startup_target = page.get_by_role(action["role"], name=action.get("name"), exact=bool(action.get("exact", False)))
+            else:
+                startup_target = page.locator(action.get("selector", ""))
+            action_timeout = int(action.get("timeout_ms", 5000))
+            if action_type == "click":
+                expect(startup_target.first, f"启动动作目标不存在：{action.get('name') or action.get('selector')}").to_be_visible(timeout=action_timeout)
+                startup_target.first.click(timeout=action_timeout)
+            elif action_type == "fill":
+                expect(startup_target.first, f"启动动作目标不存在：{action.get('name') or action.get('selector')}").to_be_visible(timeout=action_timeout)
+                startup_target.first.fill(str(action.get("value", "")), timeout=action_timeout)
+            elif action_type == "wait_for":
+                expect(startup_target.first, f"等待目标不存在：{action.get('name') or action.get('selector')}").to_be_visible(timeout=action_timeout)
+        ready_selector = visual_config.get("ready_selector")
+        if ready_selector:
+            expect(page.locator(ready_selector).first, f"页面未进入就绪状态：{ready_selector}").to_be_visible(timeout=int(visual_config.get("ready_timeout_ms", 10000)))
         name = item.get("name", item.get("trigger", "interaction"))
         trigger = page.locator(item["trigger"]).first
         expect(trigger, f"交互触发器不存在或不可见：{name} / {item['trigger']}").to_be_visible()

@@ -33,12 +33,14 @@ python tests/run_tests.py --only apk
 python tests/run_tests.py --only dom_video
 python tests/run_tests.py --only integration
 python tests/run_tests.py --only regression
+python tests/run_tests.py --only ai_visual
 ```
 
 AI 浏览器视觉测试（需要可用的 Playwright/pytest/Chromium 环境）：
 
 ```bash
-python tests/run_tests.py --visual
+python tests/run_tests.py --visual        # Demo 自检
+python tests/run_tests.py --visual-app    # MyBox 实际页面
 ```
 
 ## 3. 会改变环境或执行构建的命令必须明确启用
@@ -69,3 +71,33 @@ python tests/run_tests.py --visual
 ## 6. 控制测试范围
 
 优先完成与本次修改直接相关的轻量检查。涉及共享代码、关键播放流程或资源同步的修改，再扩大到相关集成和回归检查。不要在没有新证据或依赖关系的情况下，反复重做已经完成且与当前改动无关的检查。
+
+## 7. AI 前端开发与视觉验证（UI 任务必须遵守）
+
+修改 React/JS/TS、HTML、CSS、组件布局、颜色、字体、间距、页面导航、弹窗、播放器控件、主题或触控交互时，必须按任务范围进行真实浏览器验证；不能只凭源码推断视觉结果。
+
+### 执行顺序
+
+1. 先阅读 `tests/ai_visual_test/README.md` 和相关配置，确认被测对象是 MyBox 实际页面还是独立 Demo。
+2. 优先使用项目本地 Vite 页面，运行 `python tests/run_tests.py --visual-app`。这个命令会启动本地开发服务、使用 Playwright 控制 Chromium，并在退出时关闭它；首次运行可能需要按项目锁文件恢复 npm 依赖。
+3. 如果当前环境不能启动实际应用，先记录具体阻塞原因；可以使用 `python tests/run_tests.py --visual` 验证视觉测试工具本身，但 Demo 结果不得冒充 MyBox 实际页面验证结果。
+4. 检查测试输出的截图与元素几何报告。必须实际查看真实页面截图，再根据页面表现判断布局、配色、遮挡、尺寸、文字截断、移动端溢出和视觉层级。
+5. 需要 UI 修复时，修改真实项目源文件，然后重新运行对应浏览器检查并查看修改后的截图；不能以修改前截图或只生成截图作为验收。
+6. 使用 `tests/ai_visual_test/review-template.md` 记录视觉复核结论。没有实际查看截图时，视觉复核状态必须保持 `PENDING` 或 `UNVERIFIED`。
+
+### 默认检查范围
+
+- 手机端至少检查 320、360、390、412 CSS px 宽度；按任务需要额外检查横屏或更宽视口。
+- 检查关键元素可见性、坐标/尺寸、横向溢出、控制台错误、页面异常、第一方资源失败和关键交互。
+- 界面设计任务应保留修改后截图、Playwright trace、元素几何 JSON 与测试摘要；对重要页面维护经人工/AI 视觉确认的基准截图。
+- 基准截图用于回归检测，不得未经审查就自动更新基准来掩盖差异。视频帧、动画、时间信息及其他动态区域应通过固定测试数据或合理配置减少误报。
+- 如果用 Demo 隔离测试，应说明 Demo 只验证工具链或特定组件，不代表完整应用、真实直播网络或 Android WebView 已验证。
+
+### 失败与环境限制
+
+Playwright 包、Chromium 或 Node/Vite 不可用时，优先依据测试 README 诊断。允许的情况下再安装/恢复缺少的测试依赖；安装、启动或浏览器执行失败时，记录真实错误与报告路径。不得将计划执行的测试说成已通过，不得将浏览器测试描述成真实设备测试、真实视频解码测试或网络源可用性验证。
+
+### UI 任务交付
+
+重要 UI 修改应尽可能交付：修改文件清单、执行过的浏览器测试结果、修改后的实际页面截图、关键元素几何与错误报告、视觉复核结论及尚未验证的事项。若运行环境受限，应明确区分 `PASS`、`FAIL`、`WARN`、`UNVERIFIED` 和 `PENDING`。
+

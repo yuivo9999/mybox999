@@ -4,17 +4,17 @@
   "version": "0.3.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3000",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "vite build --mode development",
+    "dev": "node tests/frontend/run-vite.mjs --host 0.0.0.0 --port 3000",
+    "build": "node tests/frontend/run-vite.mjs build",
+    "preview": "node tests/frontend/run-vite.mjs preview",
+    "lint": "node tests/frontend/run-vite.mjs build --mode development",
     "test:live": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
     "test:playback": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
     "test:parser": "node tests/architecture/test-runner.mjs",
     "test:player": "node tests/architecture/test-runner.mjs",
     "test:state": "node tests/architecture/test-runner.mjs",
     "test:movie": "node tests/architecture/test-runner.mjs",
-    "test": "vite build --mode development",
+    "test": "node tests/frontend/run-vite.mjs build --mode development",
     "test:cache": "node tests/architecture/test-runner.mjs",
     "test:errors": "node tests/architecture/test-runner.mjs",
     "test:webview-runtime": "node tests/architecture/test-runner.mjs",
@@ -25,7 +25,8 @@
     "test:execution": "node tests/architecture/test-runner.mjs",
     "test:react": "node tests/react/page-boundaries.test.mjs",
     "proxy": "node scripts/hls-proxy-server.mjs",
-    "test:android-video-architecture": "node --test tests/architecture/android-dom-video-architecture.test.mjs"
+    "test:android-video-architecture": "node --test tests/architecture/android-dom-video-architecture.test.mjs",
+    "test:frontend-bootstrap": "node --test tests/frontend/run-vite.test.mjs"
   },
   "dependencies": {
     "@capacitor/core": "8.5.2",
