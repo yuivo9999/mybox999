@@ -1,6 +1,10 @@
 # AI 项目执行与测试规则
 
-本文件是项目级工作指令。开始任何代码修改任务前，先阅读本文件及 `tests/README.md`；不要假定存在的测试已经执行或已经通过。
+本文件是 AI 助手的工作指南；`tests/`、其中的脚本和 `toolchain-cache/` 是供 AI 助手在当前开发执行环境中使用的辅助工具箱。它们不是 MyBox APP 的产品功能、运行时依赖或终端用户需求。
+
+工具边界：不要为了准备 AI 自身的 Node/Vite、Python、Playwright、Chromium、Gradle 或 Android SDK 工具而修改产品部署流程、增加产品依赖或新增专门下载这些工具的 CI/YAML 工作流。优先复用已有工具，能完成的主要任务应先交付；可选工具或环境缺失时，记录阻塞并继续完成不受影响的工作，不要为非关键缺项拖延整体交付。
+
+开始任何代码修改任务前，先阅读本文件及 `tests/README.md`；不要假定存在的测试已经执行或已经通过。
 
 ## 1. 任务开始前
 
@@ -50,13 +54,16 @@ python tests/run_tests.py --visual-app    # MyBox 实际页面
 - `python tests/run_tests.py --install-node-deps`
 - `python tests/run_tests.py --frontend-build`
 - `python tests/run_tests.py --apk-build`
+- `python tests/run_tests.py --frontend-bundle-prepare`（明确启用的维护操作，可能访问 npm registry 并生成平台专用依赖归档）
+- `python tests/run_tests.py --android-assets-sync`（重新构建、复制 Android 资源并执行 SHA-256 核验）
+- `python tests/run_tests.py --android-build-pipeline`（完整 Android 构建和 APK 内容核验）
 
 执行之前先确认项目目录、锁文件、工具链及执行影响。依赖安装和构建失败时，保留关键错误并如实报告；不得声称没有实际执行的检查已经通过。
 
 ## 4. 测试结论必须可追溯
 
 - 只将实际执行并满足断言的检查标记为通过。
-- `PASS`、`WARN`、`FAIL`、`UNVERIFIED` 含义不同，不得将警告或未验证描述为通过。
+- `PASS`、`WARN`、`FAIL`、`BLOCKED`、`UNVERIFIED` 含义不同，不得将警告或未验证描述为通过。
 - 报告相关命令、关键输出、失败原因和输出报告路径。
 - 代码静态扫描只能证明被检查到的静态条件；不能证明实际页面交互、服务器可用性、视频解码或 Android 原生行为一定正常。
 - 独立 Demo 的通过结果不能替代 MyBox 实际页面的测试结果。
@@ -79,8 +86,8 @@ python tests/run_tests.py --visual-app    # MyBox 实际页面
 ### 执行顺序
 
 1. 先阅读 `tests/ai_visual_test/README.md` 和相关配置，确认被测对象是 MyBox 实际页面还是独立 Demo。
-2. 优先使用项目本地 Vite 页面，运行 `python tests/run_tests.py --visual-app`。这个命令会启动本地开发服务、使用 Playwright 控制 Chromium，并在退出时关闭它；首次运行可能需要按项目锁文件恢复 npm 依赖。
-3. 如果当前环境不能启动实际应用，先记录具体阻塞原因；可以使用 `python tests/run_tests.py --visual` 验证视觉测试工具本身，但 Demo 结果不得冒充 MyBox 实际页面验证结果。
+2. 优先使用项目本地 Vite 页面，运行 `python tests/run_tests.py --visual-app`。这个命令会启动本地开发服务、使用 Playwright 控制 Chromium，并在退出时关闭它；首次运行若缺少依赖，只允许从 `tests/toolchain-cache/frontend-deps/` 中经过校验的离线依赖包恢复；常规构建不自动联网下载。
+3. 如果当前环境不能启动实际应用，先记录具体阻塞原因；可以使用 `python tests/run_tests.py --visual` 验证视觉测试工具本身，但 Demo 结果不得冒充 MyBox 实际页面验证结果。前端依赖缺失时只恢复经过哈希和平台验证的离线依赖包；如果该包不存在或不匹配，应报告 BLOCKED，而不是在常规构建中临时联网下载。
 4. 检查测试输出的截图与元素几何报告。必须实际查看真实页面截图，再根据页面表现判断布局、配色、遮挡、尺寸、文字截断、移动端溢出和视觉层级。
 5. 需要 UI 修复时，修改真实项目源文件，然后重新运行对应浏览器检查并查看修改后的截图；不能以修改前截图或只生成截图作为验收。
 6. 使用 `tests/ai_visual_test/review-template.md` 记录视觉复核结论。没有实际查看截图时，视觉复核状态必须保持 `PENDING` 或 `UNVERIFIED`。
@@ -101,3 +108,15 @@ Playwright 包、Chromium 或 Node/Vite 不可用时，优先依据测试 README
 
 重要 UI 修改应尽可能交付：修改文件清单、执行过的浏览器测试结果、修改后的实际页面截图、关键元素几何与错误报告、视觉复核结论及尚未验证的事项。若运行环境受限，应明确区分 `PASS`、`FAIL`、`WARN`、`UNVERIFIED` 和 `PENDING`。
 
+
+## 8. 构建可复现性与 Android 前端资源来源（构建/资源任务必须遵守）
+
+- 常规 `npm run build` 不得临时执行 `npm ci` 或联网获取依赖。Vite 缺失时，只允许由 `tests/environment/frontend_bundle.py --restore` 从预置且校验通过的 `node_modules` 归档恢复。
+- 预置依赖包必须与当前 `package.json`、`package-lock.json` SHA-256、Node 主版本、操作系统及 CPU 架构匹配。更换锁文件或平台后必须重新准备，不能重用未匹配归档。
+- `python tests/environment/frontend_bundle.py --prepare` 是明确的维护操作：可以安装依赖、执行正式前端构建并生成平台专用归档；执行前应确认环境允许访问 npm registry 或已有完整缓存。
+- Android Web 资源的唯一权威源是本次成功构建的 `dist/`。不得将已存在的 Android `assets/public` 或旧 `dist/` 当作本次构建的成功结果。
+- 资源同步必须先确认 `npm run build` 成功，再执行本地 Capacitor CLI `copy android`，随后按 SHA-256 比较 `dist/` 与 `android/app/src/main/assets/public/` 的每个文件。任一步失败都不得继续声称资源最新。
+- APK 构建成功后，必须检查 APK 内 `assets/public/` 的文件是否与本次成功资源清单哈希匹配。Gradle 成功不单独证明前端资源最新。
+- 不要自动删除来源不明确的额外 Android 资源；先报告可能过期的 JS/CSS，只有被可靠清单证明可安全删除时才清理。
+- 推荐执行入口：`python tests/run_tests.py --build-doctor`（只读环境诊断）、`--android-assets-sync`（构建/同步/核验）、`--verify-android-assets`（资源再核验）和 `--android-build-pipeline`（完整流水线）。
+- 预置依赖归档属于 AI 助手的可选辅助材料，不是 MyBox 产品交付的必需组件。若归档不存在或当前环境无法制作，应明确报告并继续交付其他已完成内容；不要为准备这类工具添加产品 CI/YAML 下载流程。

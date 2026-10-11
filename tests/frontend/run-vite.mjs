@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Run the project's locally locked Vite CLI, restoring npm dependencies when
- * Vite is missing. This prevents an unhelpful "vite: not found" failure from
- * an uninstalled or incomplete node_modules directory.
+ * Run the project's locked Vite CLI. If dependencies are absent, recover only from
+ * the pre-verified local offline bundle; normal build commands never download npm deps.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -11,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = resolve(dirname(SCRIPT_PATH), '../..');
-const DEFAULT_INSTALL_TIMEOUT_MS = 5 * 60 * 1000;
 
 function readJson(path, label) {
   try {
@@ -24,16 +22,11 @@ function readJson(path, label) {
 function findViteCli(projectRoot) {
   const vitePackagePath = resolve(projectRoot, 'node_modules', 'vite', 'package.json');
   if (!existsSync(vitePackagePath)) return null;
-
   const vitePackage = readJson(vitePackagePath, 'installed Vite package metadata');
-  const bin = typeof vitePackage.bin === 'string'
-    ? vitePackage.bin
-    : vitePackage.bin?.vite;
+  const bin = typeof vitePackage.bin === 'string' ? vitePackage.bin : vitePackage.bin?.vite;
   if (typeof bin !== 'string' || !bin.trim()) return null;
-
   const packageDirectory = resolve(projectRoot, 'node_modules', 'vite');
   const cliPath = resolve(packageDirectory, bin);
-  // Do not execute a malformed package manifest that points outside vite/.
   if (cliPath !== packageDirectory && !cliPath.startsWith(`${packageDirectory}${sep}`)) {
     throw new Error(`Invalid Vite CLI path in ${vitePackagePath}: ${bin}`);
   }
@@ -51,85 +44,80 @@ function declaredVite(projectRoot) {
   if (!dependencies.vite) {
     throw new Error('Vite is not declared in package.json. Add it to the project dependencies before building.');
   }
-
-  const nodeMajor = Number(process.versions.node.split('.')[0]);
-  if (nodeMajor < 22) {
-    throw new Error(`This project requires Node.js >=22 (current: ${process.versions.node}). Select Node.js 22 or newer, then retry.`);
+  const [nodeMajor, nodeMinor, nodePatch] = process.versions.node.split('.').map(Number);
+  if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 12)) {
+    throw new Error(`This project requires Node.js >=22.12.0 for its locked Vite version (current: ${process.versions.node}). Select a compatible Node.js release, then retry.`);
+  }
+  if (!existsSync(resolve(projectRoot, 'package-lock.json')) && !existsSync(resolve(projectRoot, 'npm-shrinkwrap.json'))) {
+    throw new Error('A package-lock.json/npm-shrinkwrap.json is required to validate the offline dependency bundle.');
   }
   return manifest;
 }
 
-function installNpmDependencies(projectRoot) {
-  const lockPath = resolve(projectRoot, 'package-lock.json');
-  const shrinkwrapPath = resolve(projectRoot, 'npm-shrinkwrap.json');
-  if (!existsSync(lockPath) && !existsSync(shrinkwrapPath)) {
-    throw new Error('Vite is missing and no package-lock.json/npm-shrinkwrap.json exists. Refusing a non-reproducible automatic install.');
+function findPython() {
+  if (process.env.MYBOX_PYTHON) return [{ command: process.env.MYBOX_PYTHON, prefix: [] }];
+  if (process.platform === 'win32') {
+    return [
+      { command: 'python', prefix: [] },
+      { command: 'py', prefix: ['-3'] },
+    ];
   }
-
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const configuredTimeout = Number(process.env.MYBOX_NPM_CI_TIMEOUT_MS);
-  const timeout = Number.isFinite(configuredTimeout) && configuredTimeout > 0
-    ? configuredTimeout
-    : DEFAULT_INSTALL_TIMEOUT_MS;
-
-  console.log('[MyBox build] Local Vite is missing. Running `npm ci --no-audit --no-fund` from the project lock file...');
-  const result = spawnSync(npmCommand, ['ci', '--no-audit', '--no-fund'], {
-    cwd: projectRoot,
-    stdio: 'inherit',
-    timeout,
-    shell: process.platform === 'win32',
-    windowsHide: true,
-  });
-
-  if (result.error) {
-    const reason = result.error.code === 'ETIMEDOUT'
-      ? `npm ci exceeded the ${Math.round(timeout / 1000)}-second timeout`
-      : result.error.message;
-    throw new Error(`Unable to prepare frontend dependencies: ${reason}. Check network access, npm registry access, and Node.js/npm installation.`);
-  }
-  if (result.status !== 0) {
-    const detail = result.signal ? ` (signal ${result.signal})` : '';
-    throw new Error(`Unable to prepare frontend dependencies: npm ci exited with code ${result.status ?? 'unknown'}${detail}. Fix the npm installation error and retry.`);
-  }
-  return 0;
+  return [
+    { command: 'python3', prefix: [] },
+    { command: 'python', prefix: [] },
+  ];
 }
 
-/** Ensure the locked local Vite CLI exists, running npm ci only when necessary. */
-export function ensureVite(projectRoot, installDependencies = installNpmDependencies) {
+function restoreFrontendBundle(projectRoot) {
+  const restoreScript = resolve(projectRoot, 'tests', 'environment', 'frontend_bundle.py');
+  if (!existsSync(restoreScript)) {
+    throw new Error(`本地 Vite 缺失，且未找到预置依赖恢复工具：${restoreScript}`);
+  }
+  let lastError = null;
+  for (const candidate of findPython()) {
+    const result = spawnSync(candidate.command, [...candidate.prefix, restoreScript, '--restore', '--root', projectRoot], {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      windowsHide: true,
+      timeout: 120000,
+    });
+    if (result.error?.code === 'ENOENT') {
+      lastError = result.error;
+      continue;
+    }
+    if (result.error) throw new Error(`无法启动本地依赖恢复工具：${result.error.message}`);
+    if (result.status !== 0) {
+      throw new Error('本地 Vite 缺失，预置依赖恢复未成功。构建未尝试联网下载；请查看上方 BLOCKED 原因，或在准备环境显式运行 `python tests/environment/frontend_bundle.py --prepare`。');
+    }
+    return 0;
+  }
+  throw new Error(`本地 Vite 缺失，无法运行 Python 依赖恢复工具（${lastError?.message || 'python/python3 不可用'}）。请提供 Python 3，或在可运行环境显式准备并安装依赖。`);
+}
+
+/** Ensure the locked local Vite CLI exists, recovering only from the offline bundle. */
+export function ensureVite(projectRoot, restoreDependencies = restoreFrontendBundle) {
   const root = resolve(projectRoot);
   declaredVite(root);
-
   const existingCli = findViteCli(root);
   if (existingCli) return existingCli;
-
-  if (!existsSync(resolve(root, 'package-lock.json')) && !existsSync(resolve(root, 'npm-shrinkwrap.json'))) {
-    throw new Error('Vite is missing and no package-lock.json/npm-shrinkwrap.json exists. Refusing a non-reproducible automatic install.');
-  }
-
-  console.warn('[MyBox build] node_modules/vite is missing or incomplete; attempting a lock-file-based dependency restore.');
-  const installResult = installDependencies(root);
-  if (installResult !== 0) {
-    throw new Error(`Dependency restoration did not succeed (exit code ${installResult}).`);
-  }
-
+  console.warn('[MyBox build] Local Vite is missing/incomplete. Checking the pre-verified offline dependency bundle; network installation is disabled for normal builds.');
+  const restoreResult = restoreDependencies(root);
+  if (restoreResult !== 0) throw new Error(`依赖包恢复未成功（exit code ${restoreResult}）。`);
   const restoredCli = findViteCli(root);
-  if (!restoredCli) {
-    throw new Error('npm ci finished but the local Vite CLI is still missing. Check package-lock.json and npm install logs.');
-  }
+  if (!restoredCli) throw new Error('预置依赖包恢复后仍找不到本地 Vite CLI；检查归档、manifest 和 package-lock.json。');
   return restoredCli;
 }
 
 /** Run Vite directly through Node, avoiding PATH-dependent .bin resolution. */
 export function runVite(projectRoot, args = [], options = {}) {
-  const install = options.installDependencies || installNpmDependencies;
+  const restore = options.restoreDependencies || options.installDependencies || restoreFrontendBundle;
   const spawn = options.spawn || spawnSync;
-  const cliPath = ensureVite(projectRoot, install);
+  const cliPath = ensureVite(projectRoot, restore);
   const result = spawn(process.execPath, [cliPath, ...args], {
     cwd: resolve(projectRoot),
     stdio: 'inherit',
     windowsHide: true,
   });
-
   if (result.error) throw new Error(`Unable to start the Vite CLI: ${result.error.message}`);
   if (result.status !== 0) {
     if (result.status === null) throw new Error(`Vite exited without a status (signal ${result.signal || 'unknown'}).`);

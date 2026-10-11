@@ -54,7 +54,7 @@ function PlaybackView({
     const allowedAndroidSchemes = isLive
       ? ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software', 'html5_auto', 'hls_lowlatency', 'html5_hardware']
       : ['html5_auto', 'hls_worker', 'html5_hardware'];
-    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : 'html5_auto';
+    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'ijk_hardware' : 'html5_auto');
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -78,7 +78,7 @@ function PlaybackView({
       selectedScheme = (isLive && allowedLiveNativeSchemes.includes(engineInput))
         || ['html5_auto', 'hls_worker', 'hls_lowlatency', 'html5_hardware'].includes(engineInput)
         ? engineInput
-        : 'html5_auto';
+        : (isLive ? 'ijk_hardware' : 'html5_auto');
       resolvedHint = resolved.playerHint;
     } else {
       // Keep the ordinary mobile browser's existing scheme mapping unchanged.

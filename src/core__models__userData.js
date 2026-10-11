@@ -22,10 +22,10 @@ export function getPlaybackSchemeId(engine = 'ijk', decoder = 'hardware') {
   }
   return PLAYBACK_SCHEMES.find(
     scheme => scheme.engine === normalizedEngine && scheme.decoder === normalizedDecoder,
-  )?.id || 'html5_auto';
+  )?.id || 'ijk_hardware';
 }
 
-export function getPlaybackScheme(value = 'html5_auto') {
+export function getPlaybackScheme(value = 'ijk_hardware') {
   return PLAYBACK_SCHEMES.find(scheme => scheme.id === String(value || '').trim())
     || PLAYBACK_SCHEMES[0];
 }
@@ -51,7 +51,7 @@ export const defaultPlaybackSettings = () => ({
   moviePlayer: 'ijk',
   livePlayer: 'ijk',
   moviePlaybackScheme: 'ijk_hardware',
-  livePlaybackScheme: 'html5_auto',
+  livePlaybackScheme: 'ijk_hardware',
   fallbackEnabled: true,
   fallbackOrder: ['ijk', 'exo', 'native'],
   decoder: { exo: 'hardware', ijk: 'hardware', native: 'system' },
@@ -84,7 +84,7 @@ export const normalizePlaybackSettings = (value = {}) => {
     : getPlaybackSchemeId(legacyMoviePlayer, movieDecoder);
   const liveScheme = PLAYBACK_SCHEMES.some(scheme => scheme.id === input.livePlaybackScheme)
     ? getPlaybackScheme(input.livePlaybackScheme)
-    : getPlaybackSchemeId('html5', 'browser_auto');
+    : getPlaybackSchemeId(legacyLivePlayer, liveDecoder);
   return {
     ...defaultPlaybackSettings(),
     ...input,

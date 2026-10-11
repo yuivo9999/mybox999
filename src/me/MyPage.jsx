@@ -196,7 +196,7 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
     const saved=playback[scope+'PlaybackScheme'];
     const legacy=getPlaybackSchemeId(playback[scope+'Player']||'ijk',playback.decoder?.[playback[scope+'Player']||'ijk']||'hardware');
     const allowed=availableSchemes(scope);
-    const defaultAndroidScheme = scope === 'live' ? 'html5_auto' : 'html5_auto';
+    const defaultAndroidScheme = scope === 'live' ? 'ijk_hardware' : 'html5_auto';
     const desired=isAndroidPlayback?(allowed.some(item=>item.id===saved)?saved:defaultAndroidScheme):(saved||legacy);
     return allowed.find(item=>item.id===desired)||allowed[0]||getPlaybackScheme('html5_auto');
   };

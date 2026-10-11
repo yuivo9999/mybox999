@@ -89,11 +89,11 @@ const ANDROID_VOD_DOM_ENGINES = [
 ];
 
 const ANDROID_LIVE_ENGINES = [
-  { id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', mode: 'live_native', isNative: true },
+  { id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', mode: 'live_native', isNative: true, badge: '默认' },
   { id: 'ijk_software', name: 'IJKPlayer 软解', engine: 'ijk', decoder: 'software', mode: 'live_native', isNative: true },
   { id: 'exo_hardware', name: 'ExoPlayer 硬解', engine: 'exo', decoder: 'hardware', mode: 'live_native', isNative: true },
   { id: 'exo_software', name: 'ExoPlayer 软解', engine: 'exo', decoder: 'software', mode: 'live_native', isNative: true },
-  { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', isNative: false, badge: '默认' },
+  { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', isNative: false },
   { id: 'hls_lowlatency', name: 'HLS.js 低延迟直播', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', isNative: false },
   { id: 'html5_hardware', name: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', isNative: false },
 ];

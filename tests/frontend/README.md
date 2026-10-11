@@ -7,17 +7,17 @@ python tests/run_tests.py --only frontend
 python tests/run_tests.py --only dependencies
 ```
 
-## 自动防护 `vite: not found`
+## 自动防护 `vite: not found`：本地预置归档优先
 
-项目的 `dev`、`build`、`preview`、`lint` 与 `test` 脚本均通过 `tests/frontend/run-vite.mjs` 启动本地锁定版本的 Vite。运行前会确认 `node_modules/vite` 的 CLI 真实存在；如果缺失或安装不完整，启动器将检查 Node.js 版本与 npm 锁文件，并尝试执行：
+项目的 `dev`、`build`、`preview`、`lint` 与 `test` 脚本都经过 `tests/frontend/run-vite.mjs`。Vite 缺失时，启动器只允许从 `tests/toolchain-cache/frontend-deps/` 校验并恢复 `node_modules`，正常构建不自动 `npm ci`，也不临时联网下载。
+
+在具备网络或完整 npm 缓存的准备环境中明确执行一次：
 
 ```bash
-npm ci --no-audit --no-fund
+python tests/environment/frontend_bundle.py --prepare
 ```
 
-安装成功后重新检查本地 Vite，再使用当前 Node.js 直接启动其 CLI，不依赖 shell 是否能找到 `node_modules/.bin/vite`。如果网络、npm registry 或依赖安装失败，启动器会给出实际安装错误，不会把失败伪装成构建成功。默认安装超时为 5 分钟，可通过 `MYBOX_NPM_CI_TIMEOUT_MS` 调整。
-
-自动恢复需要可用的 Node.js 22+、npm、有效 `package-lock.json` 和依赖下载能力。离线环境或 registry 不可访问时，仍需先在可用网络环境中安装项目依赖。
+该维护命令会安装锁文件依赖、检查直接依赖版本、执行生产构建，再归档 `node_modules` 并生成 SHA-256 manifest。归档与 manifest 应共同交付。若归档缺失、锁文件哈希/平台不一致或内容校验失败，构建会明确输出 `BLOCKED`，不会继续尝试随机下载。
 
 ## 检查恢复机制
 
