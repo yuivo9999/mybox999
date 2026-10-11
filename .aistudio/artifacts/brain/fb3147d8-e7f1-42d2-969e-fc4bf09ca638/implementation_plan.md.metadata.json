@@ -1,6 +1,0 @@
-{
-  "summary":  "Android 工程目录精简、去重与整合计划：\n1. 修复 Spider.java 错误嵌套路径，移除重复的多层包目录\n2. 彻底移除未使用的 capacitor-cordova-android-plugins 模块及其 Gradle 依赖引用\n3. 合并 10 个重复的 drawable-port-* 与 drawable-land-* 启动图目录至统一的 drawable\n4. 验证目录缩减至约 28 个并确保构建与配置一致性",
-  "updatedAt":  "2026-10-11T02:14:05.652193774Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
