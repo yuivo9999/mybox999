@@ -10,6 +10,7 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private NativePlaybackBridge playbackBridge;
+    private AndroidLivePlayerBridge livePlayerBridge;
     private TVBoxExtensionBridge tvBoxExtensionBridge;
     private TVBoxJarBridge tvBoxJarBridge;
     private long lastBackPressTime = 0;
@@ -27,8 +28,9 @@ public class MainActivity extends BridgeActivity {
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
-            // The page-owned HTML <video> element is the Android playback surface.
-            // Permit inline/autoplay flows used by the in-page player controls.
+            // HTML playback uses the page-owned <video>; Android Live IJK/Exo
+            // can activate its own TextureView below the transparent WebView.
+            // Keep inline/autoplay flows used by the existing playback controls.
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setAllowFileAccess(true);
             settings.setAllowContentAccess(true);
@@ -39,6 +41,9 @@ public class MainActivity extends BridgeActivity {
 
         playbackBridge = new NativePlaybackBridge(this, webView);
         webView.addJavascriptInterface(playbackBridge, NativePlaybackBridge.JS_NAME);
+
+        livePlayerBridge = new AndroidLivePlayerBridge(this, webView);
+        webView.addJavascriptInterface(livePlayerBridge, AndroidLivePlayerBridge.JS_NAME);
 
         tvBoxExtensionBridge = new TVBoxExtensionBridge();
         webView.addJavascriptInterface(tvBoxExtensionBridge, TVBoxExtensionBridge.JS_NAME);
@@ -52,6 +57,9 @@ public class MainActivity extends BridgeActivity {
         if (playbackBridge != null) {
             playbackBridge.onHostPause();
         }
+        if (livePlayerBridge != null) {
+            livePlayerBridge.onHostPause();
+        }
         super.onPause();
     }
 
@@ -60,6 +68,9 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         if (playbackBridge != null) {
             playbackBridge.onHostResume();
+        }
+        if (livePlayerBridge != null) {
+            livePlayerBridge.onHostResume();
         }
     }
 
@@ -92,6 +103,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (livePlayerBridge != null) {
+            livePlayerBridge.release();
+            livePlayerBridge = null;
+        }
         if (playbackBridge != null) {
             playbackBridge.release();
             playbackBridge = null;

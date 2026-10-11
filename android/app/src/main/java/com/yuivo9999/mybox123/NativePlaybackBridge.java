@@ -1,7 +1,15 @@
 package com.yuivo9999.mybox123;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
+import android.os.Build;
+import android.os.Looper;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -9,28 +17,40 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Compatibility-only bridge for the former native video player.
+ * Android host bridge for the WebView-owned player.
  *
  * Video playback is intentionally owned by the HTMLVideoElement rendered inside
  * the current WebView page. This class MUST NOT create a TextureView, Surface,
  * ExoPlayer, IJK player, or any other independent video output surface.
  *
- * The storage bridge is retained because the web application uses it as a
- * SharedPreferences fallback. Playback methods fail explicitly so an old web
- * bundle cannot silently start an invisible native playback session.
+ * The bridge retains SharedPreferences storage, provides native Activity
+ * fullscreen/orientation control, and rejects retired native playback methods.
  */
 public final class NativePlaybackBridge {
     public static final String JS_NAME = "TVBoxAndroidBridge";
     private static final String STORAGE_NAME = "tvbox_user_data";
     private static final String DISABLED_CODE = "NATIVE_VIDEO_PLAYBACK_DISABLED";
 
+    private static final int IMMERSIVE_SYSTEM_UI_FLAGS =
+        View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+
+    private final Activity activity;
     private final SharedPreferences storage;
     private final WebView webView;
     private volatile boolean released = false;
+    private boolean nativeFullscreenActive = false;
+    private int previousSystemUiVisibility = 0;
+    private int previousRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
-    public NativePlaybackBridge(Context context, WebView webView) {
+    public NativePlaybackBridge(Activity activity, WebView webView) {
+        this.activity = activity;
         this.webView = webView;
-        storage = context.getApplicationContext().getSharedPreferences(STORAGE_NAME, Context.MODE_PRIVATE);
+        storage = activity.getApplicationContext().getSharedPreferences(STORAGE_NAME, Context.MODE_PRIVATE);
     }
 
     @JavascriptInterface
@@ -44,6 +64,111 @@ public final class NativePlaybackBridge {
     public String loadUserData(String key) {
         if (key == null || key.isEmpty()) return null;
         return storage.getString(key, null);
+    }
+
+
+    /**
+     * Enter Android native immersive fullscreen for the page-owned DOM player.
+     * The WebView still renders the video; only Activity system bars and screen
+     * orientation are controlled here.
+     */
+    @JavascriptInterface
+    public String setFullscreen(String payload) {
+        if (released) return error("PLAYER_RELEASED");
+        final boolean enabled;
+        try {
+            JSONObject request = new JSONObject(payload == null ? "{}" : payload);
+            if (!request.has("enabled")) return error("FULLSCREEN_STATE_REQUIRED");
+            enabled = request.optBoolean("enabled", false);
+        } catch (Exception ignored) {
+            return error("INVALID_FULLSCREEN_ARGUMENT");
+        }
+
+        activity.runOnUiThread(() -> applyNativeFullscreen(enabled));
+        return "{\"ok\":true,\"enabled\":" + enabled + "}";
+    }
+
+    /** Native orientation fallback for WebView runtimes without Screen Orientation API support. */
+    @JavascriptInterface
+    public String requestOrientation(String payload) {
+        if (released) return error("PLAYER_RELEASED");
+        final int requestedOrientation;
+        try {
+            JSONObject request = new JSONObject(payload == null ? "{}" : payload);
+            String orientation = request.optString("orientation", "portrait").trim().toLowerCase();
+            switch (orientation) {
+                case "portrait":
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+                    break;
+                case "landscape":
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+                    break;
+                case "sensor":
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR;
+                    break;
+                case "unspecified":
+                case "default":
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+                    break;
+                default:
+                    return error("UNSUPPORTED_ORIENTATION");
+            }
+        } catch (Exception ignored) {
+            return error("INVALID_ORIENTATION_ARGUMENT");
+        }
+
+        activity.runOnUiThread(() -> {
+            if (!released && !activity.isFinishing() && !activity.isDestroyed()) {
+                try { activity.setRequestedOrientation(requestedOrientation); } catch (Exception ignored) {}
+            }
+        });
+        return "{\"ok\":true}";
+    }
+
+    private void applyNativeFullscreen(boolean enabled) {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        Window window = activity.getWindow();
+        View decor = window.getDecorView();
+
+        if (enabled) {
+            if (!nativeFullscreenActive) {
+                previousSystemUiVisibility = decor.getSystemUiVisibility();
+                previousRequestedOrientation = activity.getRequestedOrientation();
+                nativeFullscreenActive = true;
+            }
+            try {
+                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            } catch (Exception ignored) {}
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsetsController controller = window.getInsetsController();
+                if (controller != null) {
+                    controller.setSystemBarsBehavior(
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    );
+                    controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                } else {
+                    decor.setSystemUiVisibility(IMMERSIVE_SYSTEM_UI_FLAGS);
+                }
+            } else {
+                decor.setSystemUiVisibility(IMMERSIVE_SYSTEM_UI_FLAGS);
+            }
+            return;
+        }
+
+        if (!nativeFullscreenActive) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = window.getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
+                controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+            }
+        }
+        decor.setSystemUiVisibility(previousSystemUiVisibility);
+        try {
+            activity.setRequestedOrientation(previousRequestedOrientation);
+        } catch (Exception ignored) {}
+        nativeFullscreenActive = false;
     }
 
     @JavascriptInterface
@@ -96,6 +221,9 @@ public final class NativePlaybackBridge {
     }
 
     public void onHostResume() {
+        if (nativeFullscreenActive) {
+            activity.runOnUiThread(() -> applyNativeFullscreen(true));
+        }
         dispatchHostEvent("tvbox-host-resume");
     }
 
@@ -111,6 +239,13 @@ public final class NativePlaybackBridge {
     }
 
     public void release() {
+        if (nativeFullscreenActive) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                applyNativeFullscreen(false);
+            } else {
+                activity.runOnUiThread(() -> applyNativeFullscreen(false));
+            }
+        }
         released = true;
     }
 
