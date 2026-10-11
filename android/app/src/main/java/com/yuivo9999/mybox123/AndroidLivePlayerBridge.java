@@ -219,6 +219,7 @@ public final class AndroidLivePlayerBridge {
                 if (mp.isPlaying()) dispatchEvent(activeSessionId, "playing", "", "正在播放");
             } else if (what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
                 activeState = "playing";
+                dispatchEvent(activeSessionId, "firstFrame", "", "IJK 视频首帧已渲染");
                 dispatchEvent(activeSessionId, "playing", "", "IJK 视频画面已开始渲染");
             }
             return true;
@@ -330,6 +331,11 @@ public final class AndroidLivePlayerBridge {
             @Override public void onVideoSizeChanged(VideoSize size) {
                 if (player == exoPlayer) updateVideoSize(size.width, size.height);
             }
+            @Override public void onRenderedFirstFrame() {
+                if (player == exoPlayer && !released) {
+                    dispatchEvent(activeSessionId, "firstFrame", "", "ExoPlayer 视频首帧已渲染");
+                }
+            }
         });
         player.setVideoTextureView(textureView);
         player.setMediaItem(MediaItem.fromUri(activeUrl));
@@ -348,9 +354,11 @@ public final class AndroidLivePlayerBridge {
             for (MediaCodecInfo codec : available) {
                 if ("software".equals(decoderMode) ? codec.softwareOnly : codec.hardwareAccelerated && !codec.softwareOnly) filtered.add(codec);
             }
-            // An empty list is deliberate: unsupported decode modes fail explicitly
-            // instead of silently falling back to the opposite decoder type.
-            return filtered;
+            // Prefer the requested decoder class, but do not return an empty list:
+            // on devices that expose only one usable decoder class this would make
+            // every native attempt fail before ExoPlayer's decoder fallback can run.
+            // Returning the platform candidates is the final bounded fallback.
+            return filtered.isEmpty() ? available : filtered;
         };
     }
 
@@ -514,6 +522,10 @@ public final class AndroidLivePlayerBridge {
 
     @JavascriptInterface
     public String getState(String payload) {
+        // JavascriptInterface methods may be invoked from WebView's bridge thread.
+        // Do not call ExoPlayer/IJK instance methods here: ExoPlayer is application-
+        // looper confined, and synchronous cross-thread reads can race release().
+        // These fields are volatile snapshots updated by the playback callbacks.
         JSONObject state = new JSONObject();
         try {
             state.put("ok", true);
@@ -521,9 +533,11 @@ public final class AndroidLivePlayerBridge {
             state.put("engine", activeEngine);
             state.put("decoder", activeDecoder);
             state.put("state", activeState);
-            state.put("isPlaying", exoPlayer != null ? exoPlayer.isPlaying() : (ijkPlayer != null && ijkPlayer.isPlaying()));
-            state.put("currentTime", exoPlayer != null ? exoPlayer.getCurrentPosition() / 1000d : (ijkPlayer != null ? ijkPlayer.getCurrentPosition() / 1000d : 0));
-            state.put("duration", exoPlayer != null ? exoPlayer.getDuration() / 1000d : (ijkPlayer != null ? ijkPlayer.getDuration() / 1000d : 0));
+            state.put("isPlaying", "playing".equals(activeState));
+            // Live streams do not expose reliable duration/position through this
+            // synchronous bridge snapshot. Progress remains event-driven.
+            state.put("currentTime", 0);
+            state.put("duration", 0);
         } catch (Exception ignored) {}
         return state.toString();
     }
