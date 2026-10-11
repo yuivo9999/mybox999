@@ -18,38 +18,73 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(TVBoxHttpPlugin.class);
-        super.onCreate(savedInstanceState);
-
-        WebView webView = getBridge().getWebView();
-        if (webView != null) {
-            WebView.setWebContentsDebuggingEnabled(true);
-            android.webkit.WebSettings settings = webView.getSettings();
-            settings.setJavaScriptEnabled(true);
-            settings.setDomStorageEnabled(true);
-            settings.setDatabaseEnabled(true);
-            // HTML playback uses the page-owned <video>; Android Live IJK/Exo
-            // can activate its own TextureView below the transparent WebView.
-            // Keep inline/autoplay flows used by the existing playback controls.
-            settings.setMediaPlaybackRequiresUserGesture(false);
-            settings.setAllowFileAccess(true);
-            settings.setAllowContentAccess(true);
-            settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-            webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
-            webView.setBackgroundColor(0xFF0B0D12);
+        try {
+            androidx.core.splashscreen.SplashScreen.installSplashScreen(this);
+        } catch (Throwable ignored) {
         }
 
-        playbackBridge = new NativePlaybackBridge(this, webView);
-        webView.addJavascriptInterface(playbackBridge, NativePlaybackBridge.JS_NAME);
+        try {
+            registerPlugin(TVBoxHttpPlugin.class);
+        } catch (Throwable t) {
+            android.util.Log.e("MainActivity", "Failed to register TVBoxHttpPlugin", t);
+        }
 
-        livePlayerBridge = new AndroidLivePlayerBridge(this, webView);
-        webView.addJavascriptInterface(livePlayerBridge, AndroidLivePlayerBridge.JS_NAME);
+        super.onCreate(savedInstanceState);
 
-        tvBoxExtensionBridge = new TVBoxExtensionBridge();
-        webView.addJavascriptInterface(tvBoxExtensionBridge, TVBoxExtensionBridge.JS_NAME);
+        WebView webView = null;
+        try {
+            if (getBridge() != null) {
+                webView = getBridge().getWebView();
+            }
+        } catch (Throwable t) {
+            android.util.Log.e("MainActivity", "Failed to get WebView from Bridge", t);
+        }
 
-        tvBoxJarBridge = new TVBoxJarBridge(this);
-        webView.addJavascriptInterface(tvBoxJarBridge, TVBoxJarBridge.JS_NAME);
+        if (webView != null) {
+            try {
+                WebView.setWebContentsDebuggingEnabled(true);
+                android.webkit.WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                settings.setDatabaseEnabled(true);
+                settings.setMediaPlaybackRequiresUserGesture(false);
+                settings.setAllowFileAccess(true);
+                settings.setAllowContentAccess(true);
+                settings.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+                webView.setBackgroundColor(0xFF0B0D12);
+            } catch (Throwable t) {
+                android.util.Log.e("MainActivity", "Failed to configure WebSettings", t);
+            }
+
+            try {
+                playbackBridge = new NativePlaybackBridge(this, webView);
+                webView.addJavascriptInterface(playbackBridge, NativePlaybackBridge.JS_NAME);
+            } catch (Throwable t) {
+                android.util.Log.e("MainActivity", "Failed to attach NativePlaybackBridge", t);
+            }
+
+            try {
+                livePlayerBridge = new AndroidLivePlayerBridge(this, webView);
+                webView.addJavascriptInterface(livePlayerBridge, AndroidLivePlayerBridge.JS_NAME);
+            } catch (Throwable t) {
+                android.util.Log.e("MainActivity", "Failed to attach AndroidLivePlayerBridge", t);
+            }
+
+            try {
+                tvBoxExtensionBridge = new TVBoxExtensionBridge();
+                webView.addJavascriptInterface(tvBoxExtensionBridge, TVBoxExtensionBridge.JS_NAME);
+            } catch (Throwable t) {
+                android.util.Log.e("MainActivity", "Failed to attach TVBoxExtensionBridge", t);
+            }
+
+            try {
+                tvBoxJarBridge = new TVBoxJarBridge(this);
+                webView.addJavascriptInterface(tvBoxJarBridge, TVBoxJarBridge.JS_NAME);
+            } catch (Throwable t) {
+                android.util.Log.e("MainActivity", "Failed to attach TVBoxJarBridge", t);
+            }
+        }
     }
 
     @Override

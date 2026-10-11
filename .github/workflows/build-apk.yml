@@ -91,8 +91,10 @@ jobs:
           body: |
             ### TVBox Android APK 最新版本
             
-            - 修复 Android 内置 Web 资源引用，更新至包含最新播放内核与 TVBoxLivePlayerBridge 原生桥接。
-            - 包含完整的离线启动骨架屏、移动端手势交互与画质解码能力。
+            - 解决 Android 10 打开立即闪退的问题：修复 Theme.AppCompat 继承，加入启动异常全面容错兜底。
+            - 增加 armeabi-v7a (32位 ARM)、arm64-v8a、x86、x86_64 完整 Native ABI 架构支持，彻底兼容老款电视盒子与各种低配机型。
+            - 降级 Vite 构建目标为 Chrome 70+ / ES2018，确保低版本系统内置 WebView 顺利解析运行。
+            - 同步最新的原生 JS 桥接与离线资源。
             
             **文件列表**：
             - `TVBox-release.apk`：推荐日常安装使用
