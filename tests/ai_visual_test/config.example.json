@@ -1,0 +1,38 @@
+{
+  "base_url": "http://127.0.0.1:4173/",
+  "navigation_timeout_ms": 15000,
+  "viewports": [
+    {"name": "mobile", "width": 390, "height": 844},
+    {"name": "tablet", "width": 768, "height": 1024},
+    {"name": "desktop", "width": 1280, "height": 800}
+  ],
+  "key_selectors": [
+    "[data-testid='player']",
+    "[data-testid='nav-bar']",
+    "[data-testid='channel-button']"
+  ],
+  "interactions": [
+    {
+      "name": "toggle navigation hidden",
+      "trigger": "[data-testid='nav-toggle']",
+      "target": "[data-testid='nav-bar']",
+      "expected": "hidden"
+    },
+    {
+      "name": "open channel dialog",
+      "trigger": "[data-testid='channel-button']",
+      "target": "[data-testid='channel-dialog']",
+      "expected": "visible"
+    },
+    {
+      "name": "open ratio dialog",
+      "trigger": "[data-testid='ratio-button']",
+      "target": "[data-testid='ratio-dialog']",
+      "expected": "visible"
+    }
+  ],
+  "check_horizontal_overflow": true,
+  "check_button_names": true,
+  "visual_difference_threshold": 0.015,
+  "visual_pixel_threshold": 20
+}
