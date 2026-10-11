@@ -19,11 +19,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         try {
-            androidx.core.splashscreen.SplashScreen.installSplashScreen(this);
-        } catch (Throwable ignored) {
-        }
-
-        try {
             registerPlugin(TVBoxHttpPlugin.class);
         } catch (Throwable t) {
             android.util.Log.e("MainActivity", "Failed to register TVBoxHttpPlugin", t);
