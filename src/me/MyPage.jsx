@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Clock3, Database, Film, Info, Radio, Search, Server, Settings, Trash2, Check, Download, Upload, X, CheckSquare, Square, Power, PowerOff, RefreshCw, Layers } from 'lucide-react';
+import { ChevronLeft, Clock3, Database, Film, Info, Radio, Search, Server, Settings, Trash2, Check, Download, Upload, X, CheckSquare, Square, Power, PowerOff, RefreshCw, Layers, MoreHorizontal, Link2 } from 'lucide-react';
 import { SmartImage } from '../shared__components__StateViews.jsx';
 import { sourceConfigService } from './sourceManagement.js';
 import { multiRepoService } from './repositoryManagement.js';
@@ -14,111 +14,122 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
  const [fontPicker,setFontPicker]=useState(false);
  const [confirm,setConfirm]=useState(null); const [sourceForm,setSourceForm]=useState(null); const [batchMode,setBatchMode]=useState(false); const [sourceNotice,setSourceNotice]=useState('');
  const [multiRepoMode,setMultiRepoMode]=useState(false); const [inspectingRepo,setInspectingRepo]=useState(null); const [isSyncingSingle,setIsSyncingSingle]=useState(false);
+ const [sourceQuery,setSourceQuery]=useState(''); const [sourceFilter,setSourceFilter]=useState('all'); const [sourceMoreOpen,setSourceMoreOpen]=useState(false);
+ const normalizedSourceQuery=sourceQuery.trim().toLocaleLowerCase();
+ const sourceCounts={all:sources.length,movie:sources.filter(source=>source.sourceType==='movie').length,live:sources.filter(source=>source.sourceType==='live').length,enabled:sources.filter(source=>source.enabled!==false).length};
+ const filteredSources=sources.filter(source=>{
+  const matchesType=sourceFilter==='all'||source.sourceType===sourceFilter;
+  const searchable=[source.name,source.sourceRef,source.url,source.sourceId].filter(Boolean).join(' ').toLocaleLowerCase();
+  return matchesType&&(!normalizedSourceQuery||searchable.includes(normalizedSourceQuery));
+ });
  if(tab==='history'){
   const historyMovies=history.filter(i=>i.targetType==='content').map(item=>({item,movie:movies.find(m=>m.contentId===item.targetId)||null}));
   const historyChannels=history.filter(i=>i.targetType==='channel').map(i=>channels.find(c=>c.channelId===i.targetId)).filter(Boolean);
   return <Page><Header title="播放历史"/>{historyMovies.length?<div className="movie-grid">{historyMovies.filter(({movie})=>movie).map(({movie,item})=>{const ep=movie.episodes?.find(e=>e.episodeId===item.episodeId);const pct=item.durationSeconds?Math.min(100,Math.round(item.positionSeconds/item.durationSeconds*100)):0;return <article className="movie-card history-card" key={item.historyId} onClick={()=>onMovie(movie)}><SmartImage src={movie.poster} alt={movie.title}/><div><b>{movie.title}</b><span>{ep?.title??'继续观看'} · {pct}%</span><small>最近观看：{new Date(item.lastPlayedAt||Date.now()).toLocaleString()}</small></div></article>})}</div>:<Empty text="还没有播放历史"/>}{historyMovies.filter(({movie})=>!movie).map(({item})=><div className="info-card" key={item.historyId}><Database size={18}/><div><b>暂时无法找到来源</b><span>播放历史已保留：{item.targetId}</span></div></div>)}{historyChannels.length>0&&<><SectionTitle title="Live"/><div className="channel-list">{historyChannels.map(c=><button className="menu" key={c.channelId} onClick={()=>onLiveChannel(c)}><Radio size={18}/><span>{c.name}<small>{c.category}</small></span><ChevronLeft className="flip" size={17}/></button>)}</div></>}</Page>;
  }
  if(tab==='search-history') return <Page><Header title="搜索历史"/><div className="actions"><button className="secondary" disabled={!searches.length} onClick={()=>setConfirm({type:'searches'})}>清空搜索历史</button></div><div className="history-list">{searches.map(i=><div className="menu" key={i.searchId}><Search size={18}/><button className="history-keyword" onClick={()=>onSearchHistory(i.keyword)}>{i.keyword}</button><em>{i.count} 次</em><button className="icon-button" aria-label="删除历史" onClick={()=>setConfirm({type:'search',id:i.searchId})}>×</button></div>)}{!searches.length&&<Empty text="还没有搜索历史"/>}</div>{confirm&&<ConfirmDialog title={confirm.type==='searches'?'清空搜索历史？':'删除这条搜索历史？'} onCancel={()=>setConfirm(null)} onConfirm={()=>{if(confirm.type==='searches')onClearSearches();else onRemoveSearch(confirm.id);setConfirm(null)}}/>}</Page>;
-  if(tab==='sources') return <Page><Header title="源管理"/>
-    <div style={{
-      background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9))',
-      border: '1px solid #334155',
-      borderRadius: 16,
-      padding: '14px 16px',
-      marginBottom: 14,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 10
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(56,189,248,0.15)', display: 'grid', placeItems: 'center', color: '#38bdf8' }}>
-            <Layers size={20} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <b style={{ fontSize: 15, color: '#f8fafc' }}>多仓订阅与单仓聚合</b>
-              <span style={{ fontSize: 10, background: 'rgba(56,189,248,0.2)', color: '#38bdf8', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>PRO</span>
-            </div>
-            <span style={{ fontSize: 11, color: '#94a3b8' }}>支持多仓导入 · Punycode 中文转码 · 主备地址回退 · 智能重试 · Sites Key 自动去重合并</span>
-          </div>
-        </div>
+ if(tab==='sources') return <Page><Header title="源管理"/>
+    <p className="sources-intro">管理影视源、Live 直播源与订阅配置</p>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="primary" onClick={()=>setMultiRepoMode(true)} style={{ padding: '8px 14px', fontSize: 12 }}>
-            <Layers size={14}/> 进入多仓工作台 (第二界面)
+    <section className="source-overview" aria-label="源概览">
+      <div className="source-overview-card"><span>全部源</span><b>{sourceCounts.all}</b><small>影视与 Live</small></div>
+      <div className="source-overview-card"><span>已启用</span><b>{sourceCounts.enabled}</b><small>允许参与使用</small></div>
+    </section>
+
+    <section className="source-toolbar" aria-label="源管理操作">
+      <div className="source-primary-actions">
+        <button className="primary source-add-button" onClick={()=>{setSourceMoreOpen(false);setSourceNotice('');setSourceForm({sourceType:'live',name:''})}}>
+          <span className="source-add-symbol">+</span> 添加源
+        </button>
+        <button className="secondary source-repo-button" onClick={()=>{setSourceMoreOpen(false);setMultiRepoMode(true)}} title="管理多仓订阅与单仓聚合">
+          <Layers size={16}/> 多仓管理
+        </button>
+      </div>
+      <div className="source-secondary-actions">
+        <button className="secondary" onClick={()=>{setSourceMoreOpen(false);setBatchMode(true)}}>
+          <CheckSquare size={15}/> 批量管理
+        </button>
+        <label className="secondary file-button source-import-button" title="导入单仓配置">
+          <Upload size={15}/> 导入
+          <input type="file" accept=".json,.txt,.m3u,application/json,text/plain" hidden onChange={async e=>{
+            const file=e.target.files?.[0];
+            if(!file)return;
+            try{
+              const parsed=await sourceConfigService.importFile(file);
+              await onSaveSources(parsed);
+              setSourceNotice(`已导入 ${parsed.length} 个源`);
+            }catch(error){
+              console.error(error);
+              setSourceNotice(`导入失败：${error?.message||'文件格式无效'}`);
+            }finally{
+              e.target.value='';
+            }
+          }}/>
+        </label>
+        <div className="source-more-wrap">
+          <button className="secondary" aria-haspopup="menu" aria-expanded={sourceMoreOpen} onClick={()=>setSourceMoreOpen(open=>!open)}>
+            <MoreHorizontal size={17}/> 更多
           </button>
+          {sourceMoreOpen&&<div className="source-more-menu" role="menu">
+            <button type="button" role="menuitem" onClick={()=>{
+              try{
+                sourceConfigService.download(sources);
+                setSourceNotice('源配置已导出');
+              }catch(error){
+                console.error(error);
+                setSourceNotice(`导出失败：${error?.message||'未知错误'}`);
+              }
+              setSourceMoreOpen(false);
+            }}><Download size={15}/> 导出源配置</button>
+            <button type="button" role="menuitem" onClick={async ()=>{
+              setSourceMoreOpen(false);
+              if(!window.confirm('确定要恢复项目自带的默认源吗？这不会删除您手动添加的源。'))return;
+              try{
+                const defaults=sourceConfigService.getDefaultSources();
+                const existing=new Set(sources.map(source=>`${source.sourceType}|${source.sourceRef||source.url||''}`));
+                const additions=defaults.filter(source=>!existing.has(`${source.sourceType}|${source.sourceRef||source.url||''}`));
+                await onSaveSources([...sources,...additions]);
+                setSourceNotice(additions.length?`已恢复 ${additions.length} 个内置源`:'内置源已经存在，无需重复添加');
+              }catch(error){
+                console.error(error);
+                setSourceNotice(`恢复内置源失败：${error?.message||'未知错误'}`);
+              }
+            }}><Database size={15}/> 恢复内置源</button>
+            <div className="source-more-divider"/>
+            <button type="button" role="menuitem" className="source-more-danger" onClick={()=>{setSourceMoreOpen(false);setConfirm({type:'clear-all-sources'})}}>
+              <Trash2 size={15}/> 清空全部源与缓存
+            </button>
+          </div>}
         </div>
       </div>
+    </section>
+
+    {sourceNotice&&<div className="batch-source-notice source-main-notice" role="status">{sourceNotice}</div>}
+
+    <div className="source-search" role="search">
+      <Search size={18} aria-hidden="true"/>
+      <input type="search" value={sourceQuery} onChange={event=>setSourceQuery(event.target.value)} placeholder="搜索源名称或地址" aria-label="搜索源名称或地址"/>
+      {sourceQuery&&<button type="button" className="source-search-clear" aria-label="清空搜索" onClick={()=>setSourceQuery('')}><X size={16}/></button>}
     </div>
 
-    <div className="actions" style={{ marginTop: 0, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      <button className="secondary" onClick={()=>setMultiRepoMode(true)} title="管理多仓订阅与单仓聚合">
-        <Layers size={15}/> 多仓管理
-      </button>
-      <button className="secondary" onClick={()=>{setSourceNotice('');setSourceForm({sourceType:'live',name:''})}}>
-        添加单源
-      </button>
-      <button className="secondary" onClick={()=>setBatchMode(true)}>
-        <CheckSquare size={15}/> 批量管理
-      </button>
-      <label className="secondary file-button">
-        <Upload size={15}/> 导入单仓
-        <input type="file" accept=".json,.txt,.m3u,application/json,text/plain" hidden onChange={async e=>{
-          const file=e.target.files?.[0];
-          if(!file)return;
-          try{
-            const parsed=await sourceConfigService.importFile(file);
-            await onSaveSources(parsed);
-            setSourceNotice(`已导入 ${parsed.length} 个源`);
-          }catch(error){
-            console.error(error);
-            setSourceNotice(`导入失败：${error?.message||'文件格式无效'}`);
-          }finally{
-            e.target.value='';
-          }
-        }}/>
-      </label>
-      <button className="secondary" onClick={()=>{
-        try{
-          sourceConfigService.download(sources);
-          setSourceNotice('源配置已导出');
-        }catch(e){
-          console.error(e);
-          setSourceNotice(`导出失败：${e?.message||'未知错误'}`);
-        }
-      }}>
-        <Download size={15}/> 导出
-      </button>
-      <button className="secondary" title="恢复项目内置的精品影视与直播源" onClick={async ()=>{
-        if(window.confirm('确定要恢复项目自带的默认源吗？这不会删除您手动添加的源。')){
-          try{
-            const defaults=sourceConfigService.getDefaultSources();
-            const existing=new Set(sources.map(s=>`${s.sourceType}|${s.sourceRef||s.url||''}`));
-            const additions=defaults.filter(d=>!existing.has(`${d.sourceType}|${d.sourceRef||d.url||''}`));
-            await onSaveSources([...sources,...additions]);
-            setSourceNotice(additions.length?`已恢复 ${additions.length} 个内置源`:'内置源已经存在，无需重复添加');
-          }catch(e){
-            console.error(e);
-            setSourceNotice(`恢复内置源失败：${e?.message||'未知错误'}`);
-          }
-        }
-      }}>
-        恢复内置
-      </button>
-      <button className="secondary danger" style={{color:'#e53935',borderColor:'#f8d7da',background:'#fdf2f2',marginLeft:'auto'}} onClick={()=>setConfirm({type:'clear-all-sources'})} title="彻底清空源与缓存">
-        <Trash2 size={15}/> 清空全部
-      </button>
+    <div className="source-filter-tabs" role="tablist" aria-label="源类型筛选">
+      <button type="button" role="tab" aria-selected={sourceFilter==='all'} className={sourceFilter==='all'?'active':''} onClick={()=>setSourceFilter('all')}>全部 <span>{sourceCounts.all}</span></button>
+      <button type="button" role="tab" aria-selected={sourceFilter==='movie'} className={sourceFilter==='movie'?'active':''} onClick={()=>setSourceFilter('movie')}>影视 <span>{sourceCounts.movie}</span></button>
+      <button type="button" role="tab" aria-selected={sourceFilter==='live'} className={sourceFilter==='live'?'active':''} onClick={()=>setSourceFilter('live')}>Live <span>{sourceCounts.live}</span></button>
     </div>
 
-    {sourceNotice&&<div className="batch-source-notice" role="status">{sourceNotice}</div>}
+    <div className="source-list-heading"><b>{sourceFilter==='movie'?'影视源':sourceFilter==='live'?'Live 源':'全部源'}</b><span>{filteredSources.length} 个</span></div>
+    <SourceList
+      sources={filteredSources}
+      onEnabled={onSourceEnabled}
+      onActive={onSourceActive}
+      onTest={onTestSource}
+      onRemove={onRemoveSource}
+      emptyText={normalizedSourceQuery?'未找到匹配的源':sourceFilter==='movie'?'暂无影视源':sourceFilter==='live'?'暂无 Live 源':'暂无内容源'}
+    />
+    <p className="source-footer-note">支持网络 URL、JSON、M3U 与 #genre# TXT 直播源。源配置、测试结果与运行状态分别管理。</p>
 
-    <><SectionTitle title={`影视源 (${sources.filter(s=>s.sourceType==='movie').length})`}/><SourceList sources={sources.filter(s=>s.sourceType==='movie')} onEnabled={onSourceEnabled} onActive={onSourceActive} onTest={onTestSource} onRemove={onRemoveSource}/><SectionTitle title={`Live 源 (${sources.filter(s=>s.sourceType==='live').length})`}/><SourceList sources={sources.filter(s=>s.sourceType==='live')} onEnabled={onSourceEnabled} onActive={onSourceActive} onTest={onTestSource} onRemove={onRemoveSource}/></>
-
-    <InfoCard title="源边界与多仓聚合" text="影视源与 Live 源独立管理。支持网络 URL、多仓聚合单仓导入、标准 JSON、M3U 播放列表以及 #genre# 分类 TXT 电视直播源文件，导入与运行时状态分离。"/>
-
-    {confirm?.type==='clear-all-sources'&&<ConfirmDialog title="彻底清空所有源与缓存？" text="此操作将彻底删除源管理中的全部影视源与 Live 直播源（包括项目自带内置源），并清理全量本地数据与播放缓存，保证不留残余。确定清空吗？" onCancel={()=>setConfirm(null)} onConfirm={async ()=>{setConfirm(null);await onClearAllSources?.();}}/>}
+    {confirm?.type==='clear-all-sources'&&<ConfirmDialog title="彻底清空所有源与缓存？" text="此操作将删除源管理中的全部影视源与 Live 直播源（包括内置源），并清理本地数据与播放缓存。该操作不可撤销。" onCancel={()=>setConfirm(null)} onConfirm={async ()=>{setConfirm(null);await onClearAllSources?.();}}/>}
 
     {sourceForm&&<SourceForm value={sourceForm} onCancel={()=>setSourceForm(null)} onSave={async source=>{
       const additions=Array.isArray(source)?source:[{...source,sourceId:`source_${source.sourceType}_${Date.now()}`,enabled:true,status:'未测试'}];
@@ -130,7 +141,7 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
         console.error(error);
         setSourceNotice(`保存源失败：${error?.message||'未知错误'}`);
       }
-    }}/>}
+    }}/>} 
 
     {batchMode&&<BatchSourceManager sources={sources} onBack={()=>setBatchMode(false)} onEnabled={onSourceEnabled} onTest={onTestSource} onRemove={onRemoveSource}/>}
 
@@ -308,60 +319,73 @@ function BatchSourceManager({sources,onBack,onEnabled,onTest,onRemove}){
     </div>
   </div>;
 }
-function SourceList({sources,onEnabled,onActive,onTest,onRemove}){
+function sourceAddressLabel(source){
+  const reference=String(source.sourceRef||source.url||'').trim();
+  if(!reference)return String(source.sourceCapability||'').startsWith('tvbox-')?'扩展源':'未提供地址';
+  if(/^local:\/\//i.test(reference))return '本地源';
+  if(/^https?:\/\//i.test(reference)){
+    try{return new URL(reference).hostname.replace(/^www\./i,'')||'网络源';}
+    catch{return '网络源';}
+  }
+  if(/^\s*[\[{]/.test(reference))return '内嵌配置';
+  return '自定义地址';
+}
+
+function SourceList({sources,onEnabled,onActive,onTest,onRemove,emptyText='暂无内容源'}){
   const [removeId,setRemoveId]=useState(null);
   const removeSource=sources.find(source=>source.sourceId===removeId);
   return <div className="source-list">{sources.map((source, index)=>{
-    const isTesting = source.status === '测试中';
-    const capability = String(source.sourceCapability || '').trim();
-    const tvboxKind = String(source.tvboxAdapterKind || '').trim().toLowerCase();
-    const safeExtFormats = new Set(['json-vod', 'remote-json', 'remote-resource', 'inline-json']);
-    const runtimeSupported = capability === 'tvbox-jar'
-      || capability === 'tvbox-http-vod-with-jar'
-      || (capability === 'tvbox-ext' && tvboxKind === 'ext' && safeExtFormats.has(String(source.tvboxExtFormat || '').trim()));
-    const isUnsupported = (capability.startsWith('tvbox-') || String(source.adapterType || '').startsWith('tvbox-')) && !runtimeSupported;
-    const capabilityLabel = source.tvboxAdapterKind === 'drpy-js' ? 'Drpy JS待适配'
-      : source.tvboxAdapterKind === 'csp' ? 'CSP待适配'
-      : source.tvboxAdapterKind === 'jar' || source.tvboxAdapterKind === 'http-vod-with-jar' ? (runtimeSupported ? 'JAR执行器' : 'JAR待适配')
-      : source.tvboxAdapterKind === 'ext' ? (runtimeSupported ? '安全JSON EXT' : 'ext待适配')
-      : source.tvboxAdapterKind === 'live-provider' ? 'Live提供器待适配'
-      : isUnsupported ? 'TVBox扩展待适配' : '';
-    const statusColor = (source.status==='正常'||source.status==='可用') ? '#22c55e' : (source.status==='不可用'||source.status==='异常') ? '#f87171' : isTesting ? '#38bdf8' : '#94a3b8';
-    return (
-      <article className="source-card" key={`${source.sourceId || 'src'}_${index}`}>
-        <div className="source-card-main">
-          <div className="source-card-icon"><Server size={19}/></div>
-          <div className="source-card-info">
-            <b title={source.name}>{source.name}</b>
-            <small>
-              {source.sourceType}{source.liveMode==='tv1'?' · TV1专用':''} ·
-              <span style={{color: statusColor, fontWeight: 600}}> {source.status}</span>
-              {isUnsupported && <span style={{color:'#f59e0b',fontWeight:600}}> · {capabilityLabel}</span>}
-              {source.isActive?' · 当前使用':''}
-            </small>
+    const isTesting=source.status==='测试中';
+    const status=String(source.status||'未测试');
+    const statusKind=(status==='正常'||status==='可用')?'ok':(status==='不可用'||status==='异常')?'error':isTesting?'testing':'idle';
+    const capability=String(source.sourceCapability||'').trim();
+    const tvboxKind=String(source.tvboxAdapterKind||'').trim().toLowerCase();
+    const safeExtFormats=new Set(['json-vod','remote-json','remote-resource','inline-json']);
+    const runtimeSupported=capability==='tvbox-jar'
+      ||capability==='tvbox-http-vod-with-jar'
+      ||(capability==='tvbox-ext'&&tvboxKind==='ext'&&safeExtFormats.has(String(source.tvboxExtFormat||'').trim()));
+    const isUnsupported=(capability.startsWith('tvbox-')||String(source.adapterType||'').startsWith('tvbox-'))&&!runtimeSupported;
+    const capabilityLabel=source.tvboxAdapterKind==='drpy-js'?'Drpy JS 待适配'
+      :source.tvboxAdapterKind==='csp'?'CSP 待适配'
+      :source.tvboxAdapterKind==='jar'||source.tvboxAdapterKind==='http-vod-with-jar'?(runtimeSupported?'JAR 执行器':'JAR 待适配')
+      :source.tvboxAdapterKind==='ext'?(runtimeSupported?'安全 JSON EXT':'EXT 待适配')
+      :source.tvboxAdapterKind==='live-provider'?'Live 提供器待适配'
+      :isUnsupported?'TVBox 扩展待适配':'';
+    const isEnabled=source.enabled!==false;
+    const isLive=source.sourceType==='live';
+    return <article className="source-card" key={`${source.sourceId||'src'}_${index}`}>
+      <div className="source-card-main">
+        <div className={`source-card-icon ${isLive?'is-live':''}`}>{isLive?<Radio size={19}/>:<Film size={19}/>}</div>
+        <div className="source-card-info">
+          <div className="source-card-title-row">
+            <b title={source.name||'未命名源'}>{source.name||'未命名源'}</b>
+            <span className={`source-type-tag ${isLive?'live':'movie'}`}>{isLive?'Live 源':'影视源'}</span>
           </div>
+          <div className="source-state-row">
+            <span className={`source-status-tag ${statusKind}`}><i aria-hidden="true"/>{status}</span>
+            <span className={`source-enabled-tag ${isEnabled?'enabled':'disabled'}`}>{isEnabled?'已启用':'已停用'}</span>
+            {source.isActive&&<span className="source-active-tag">当前使用</span>}
+          </div>
+          <div className="source-address" title={sourceAddressLabel(source)}><Link2 size={12}/><span>{sourceAddressLabel(source)}</span>{isLive&&source.liveMode==='tv1'&&<em>TV1 专用</em>}</div>
+          {capabilityLabel&&<div className={`source-capability-note ${isUnsupported?'unsupported':''}`}>{capabilityLabel}</div>}
         </div>
-        <div className="source-card-actions" aria-label="源操作">
-          <button className={source.isActive?'primary':'secondary'} disabled={isUnsupported} onClick={()=>onActive?.(source.sourceId)}>
-            {source.isActive?'当前使用':isUnsupported?'待适配':'设为当前'}
-          </button>
-          <button className="secondary" disabled={isTesting||isUnsupported} onClick={()=>onTest(source)}>
-            {isTesting?'测试中…':isUnsupported?'暂不可测':'测试'}
-          </button>
-          <button className="secondary source-action" onClick={()=>onEnabled(source.sourceId,!source.enabled)} aria-label={source.enabled?'停用源':'启用源'}>
-            {source.enabled?<><Check size={15}/>停用</>:<>启用</>}
-          </button>
-          <button className="icon-button source-delete" onClick={()=>setRemoveId(source.sourceId)} aria-label="删除源" title="删除源"><X size={17}/></button>
-        </div>
-      </article>
-    );
+      </div>
+      <div className="source-card-actions" aria-label={`${source.name||'内容源'}操作`}>
+        <button type="button" className={source.isActive?'primary source-action':'secondary source-action'} disabled={isUnsupported||source.isActive} onClick={()=>onActive?.(source.sourceId)}>
+          {source.isActive?'当前使用':isUnsupported?'待适配':'设为当前'}
+        </button>
+        <button type="button" className="secondary source-action" disabled={isTesting||isUnsupported} onClick={()=>onTest?.(source)}>
+          {isTesting?<><RefreshCw className="source-testing-icon" size={14}/>测试中</>:isUnsupported?'暂不可测':'测试'}
+        </button>
+        <button type="button" className={`source-toggle ${isEnabled?'is-on':''}`} role="switch" aria-checked={isEnabled} aria-label={isEnabled?'停用源':'启用源'} onClick={()=>onEnabled?.(source.sourceId,!isEnabled)}>
+          <span className="source-toggle-track"><span/></span><span>{isEnabled?'启用中':'已停用'}</span>
+        </button>
+        <button type="button" className="icon-button source-delete" onClick={()=>setRemoveId(source.sourceId)} aria-label={`删除${source.name||'内容源'}`} title="删除源"><Trash2 size={16}/></button>
+      </div>
+    </article>;
   })}
-  {!sources.length&&<Empty text="暂无内容源"/>}
-  {removeSource&&<ConfirmDialog
-    title={`确定删除“${removeSource.name}”吗？`}
-    onCancel={()=>setRemoveId(null)}
-    onConfirm={()=>{onRemove(removeSource.sourceId);setRemoveId(null)}}
-  />}
+  {!sources.length&&<div className="source-empty-state"><div className="source-empty-icon"><Server size={20}/></div><b>{emptyText}</b><span>{emptyText==='未找到匹配的源'?'试试更短的关键词，或切换源类型。':'添加源或导入配置后，源列表会显示在这里。'}</span></div>}
+  {removeSource&&<ConfirmDialog title={`确定删除“${removeSource.name||'未命名源'}”吗？`} text="删除后，该源将从源列表中移除。" onCancel={()=>setRemoveId(null)} onConfirm={()=>{onRemove?.(removeSource.sourceId);setRemoveId(null)}}/>}
   </div>;
 }
 const SourceForm=({value,onCancel,onSave})=>{
@@ -422,38 +446,33 @@ const SourceForm=({value,onCancel,onSave})=>{
       ...(finalType === 'live' ? { liveMode } : {}),
     });
   };
-  return <div className="modal-backdrop"><div className="modal">
-    <b>添加内容源</b>
-    <div className="info-card" style={{marginTop:0,marginBottom:10,padding:10}}>
-      <Info size={14}/>
-      <span style={{fontSize:11}}>支持输入网络 URL、直接粘贴带 #genre# 文本或选择本地 .txt / .m3u / .json 文件。</span>
+  return <div className="modal-backdrop source-form-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onCancel()}}>
+    <div className="modal source-form-modal" role="dialog" aria-modal="true" aria-labelledby="source-form-title" onMouseDown={event=>event.stopPropagation()}>
+      <div className="source-form-heading"><div><span className="eyebrow">SOURCE SETUP</span><b id="source-form-title">添加内容源</b></div><button type="button" className="icon-button" aria-label="关闭添加源" onClick={onCancel}><X size={17}/></button></div>
+      <div className="source-form-hint"><Info size={15}/><span>输入网络 URL、粘贴 JSON / #genre# 文本，或从本地选择 TXT、M3U、JSON 文件。</span></div>
+      <label className="source-form-field"><span>源名称 <small>选填</small></span><input value={name} onChange={event=>setName(event.target.value)} placeholder="例如：家庭影视源" autoComplete="off"/></label>
+      <div className="source-form-field">
+        <label htmlFor="source-content-input">源地址或配置内容</label>
+        <textarea id="source-content-input" className="source-content-input" rows={5} value={url} onChange={event=>{
+          const val=event.target.value;
+          setUrl(val);
+          setLocalFileSources(null);
+          setFileStatus('');
+          if(val.includes('#genre#')||/^#EXTM3U/i.test(val.trim())){
+            setSourceType('live');
+            if(val.includes('#genre#'))setLiveMode('tv1');
+          }
+        }} placeholder={"https://example.com/api.php/provide/vod/\n或粘贴 JSON、M3U、#genre# 直播源内容"} spellCheck={false}/>
+        <div className="source-form-file-row"><span>也可以直接导入本地文件</span><label className="secondary source-file-button"><Upload size={15}/> 选择文件<input type="file" accept=".txt,.m3u,.json,text/plain,application/json" hidden onChange={handleFile}/></label></div>
+      </div>
+      <div className="source-form-selects">
+        <label className="source-form-field"><span>源类型</span><select value={sourceType} onChange={event=>setSourceType(event.target.value)} disabled={Boolean(localFileSources?.length)}><option value="movie">影视源</option><option value="live">Live 源</option></select></label>
+        {sourceType==='live'&&<label className="source-form-field"><span>直播模式</span><select value={liveMode} onChange={event=>setLiveMode(event.target.value)} disabled={Boolean(localFileSources?.length)}><option value="generic">通用 Live 兼容入口</option><option value="tv1">TV1 专用直播（#genre# TXT）</option></select></label>}
+      </div>
+      <div className={`source-form-status ${fileStatus?'has-message':''}`} role={fileStatus?'status':undefined}>{fileStatus||'保存前会按源内容类型进行识别与校验。'}</div>
+      <div className="actions source-form-actions"><button type="button" className="secondary" onClick={onCancel}>取消</button><button type="button" className="primary" disabled={!localFileSources?.length&&!url.trim()} onClick={handleSave}>保存源</button></div>
     </div>
-    <input value={name} onChange={e=>setName(e.target.value)} placeholder="源名称（选填）"/>
-    <div style={{display:'flex',gap:8}}>
-      <input style={{flex:1}} value={url} onChange={e=>{
-        const val = e.target.value;
-        setUrl(val);
-        if (val.includes('#genre#') || val.startsWith('#EXTM3U')) {
-          setSourceType('live');
-          if (val.includes('#genre#')) setLiveMode('tv1');
-        }
-      }} placeholder="源地址 URL 或直接粘贴文本数据"/>
-      <label className="secondary modal-upload-btn" title="选择本地文件">
-        <Upload size={16}/>
-        <input type="file" accept=".txt,.m3u,.json,text/plain,application/json" hidden onChange={handleFile}/>
-      </label>
-    </div>
-    <select value={sourceType} onChange={e=>setSourceType(e.target.value)} disabled={Boolean(localFileSources?.length)}>
-      <option value="movie">影视源</option>
-      <option value="live">Live 源</option>
-    </select>
-    {sourceType==='live' && <select value={liveMode} onChange={e=>setLiveMode(e.target.value)} disabled={Boolean(localFileSources?.length)}><option value="generic">通用 Live 兼容入口</option><option value="tv1">TV1 专用直播（#genre# TXT）</option></select>}
-    <div style={{fontSize:11,color:'#8f9aaa',minHeight:16}}>{fileStatus}</div>
-    <div className="actions">
-      <button className="secondary" onClick={onCancel}>取消</button>
-      <button className="primary" disabled={!localFileSources?.length && !url.trim()} onClick={handleSave}>保存</button>
-    </div>
-  </div></div>;
+  </div>;
 };
 const ConfirmDialog=({title,text,onCancel,onConfirm})=><div className="modal-backdrop"><div className="modal"><b>{title}</b>{text&&<p style={{fontSize:13,color:'#666',marginTop:6,marginBottom:12,lineHeight:1.4}}>{text}</p>}<div className="actions"><button className="secondary" onClick={onCancel}>取消</button><button className="primary" style={{background:'#e53935',borderColor:'#e53935',color:'#fff'}} onClick={onConfirm}>确认</button></div></div></div>;
 const Page=({children})=><main className="page">{children}</main>;
