@@ -62,11 +62,10 @@ export function getRuntimeCapabilities() {
     runtime: isAndroid ? RUNTIME_ENV.ANDROID : RUNTIME_ENV.WEB,
     isAndroid,
     isWeb: isBrowser,
-    // 解码内核支持
-    // Android media pixels are now rendered by the page-owned HTMLVideoElement.
-    // ExoPlayer/IJKPlayer are deliberately not advertised as selectable engines.
-    supportsExoPlayer: false,
-    supportsIjkPlayer: false,
+    // IJK/Exo are available only through the dedicated Android Live route;
+    // the legacy generic native-player capability remains intentionally disabled.
+    supportsExoPlayer: isAndroid,
+    supportsIjkPlayer: isAndroid,
     supportsAndroidNativePlayer: false,
     supportsHlsJs: hasMediaSource,
     supportsHtml5Video: typeof window !== 'undefined',
@@ -89,8 +88,12 @@ const ANDROID_VOD_DOM_ENGINES = [
   { id: 'html5_hardware', name: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', isNative: false },
 ];
 
-const ANDROID_LIVE_DOM_ENGINES = [
-  { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', isNative: false, badge: '默认' },
+const ANDROID_LIVE_ENGINES = [
+  { id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', mode: 'live_native', isNative: true, badge: '默认' },
+  { id: 'ijk_software', name: 'IJKPlayer 软解', engine: 'ijk', decoder: 'software', mode: 'live_native', isNative: true },
+  { id: 'exo_hardware', name: 'ExoPlayer 硬解', engine: 'exo', decoder: 'hardware', mode: 'live_native', isNative: true },
+  { id: 'exo_software', name: 'ExoPlayer 软解', engine: 'exo', decoder: 'software', mode: 'live_native', isNative: true },
+  { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', isNative: false },
   { id: 'hls_lowlatency', name: 'HLS.js 低延迟直播', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', isNative: false },
   { id: 'html5_hardware', name: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', isNative: false },
 ];
@@ -142,13 +145,13 @@ const ROUTE_DEFINITIONS = {
     runtime: RUNTIME_ENV.ANDROID,
     kind: MEDIA_KIND.LIVE,
     viewTier: VIEW_TIER.MAIN,
-    defaultEngine: 'html5',
-    defaultDecoder: 'browser_auto',
-    networkChannel: 'webview_dom_media',
-    surfaceSync: false,
-    uiLayout: 'embedded_dom',
-    description: '直播画面由页面内 HLS.js、MPEG-TS/MSE 或 HTML 视频元素渲染，随播放器窗口移动',
-    engines: ANDROID_LIVE_DOM_ENGINES,
+    defaultEngine: 'ijk',
+    defaultDecoder: 'hardware',
+    networkChannel: 'android_live_player',
+    surfaceSync: true,
+    uiLayout: 'native_video_under_webview',
+    description: 'Android Live 使用独立 IJK / Exo 原生播放器或页面内 HTML5 播放器，原生视频区域跟随直播窗口同步',
+    engines: ANDROID_LIVE_ENGINES,
   },
 
   // ④ 路线 4: Android · Live直播 · 次界面(沉浸全屏)
@@ -159,14 +162,14 @@ const ROUTE_DEFINITIONS = {
     runtime: RUNTIME_ENV.ANDROID,
     kind: MEDIA_KIND.LIVE,
     viewTier: VIEW_TIER.IMMERSIVE,
-    defaultEngine: 'html5',
-    defaultDecoder: 'browser_auto',
-    networkChannel: 'webview_dom_media',
-    surfaceSync: false,
-    uiLayout: 'embedded_dom_fullscreen',
+    defaultEngine: 'ijk',
+    defaultDecoder: 'hardware',
+    networkChannel: 'android_live_player',
+    surfaceSync: true,
+    uiLayout: 'native_video_under_webview_fullscreen',
     autoOrientation: 'landscape',
-    description: '沉浸模式仍使用当前页面内视频元素；方向切换、线路切换和控制菜单共用同一播放节点',
-    engines: ANDROID_LIVE_DOM_ENGINES,
+    description: '沉浸直播复用同一个 Live 播放会话，独立原生视频区域跟随沉浸布局同步',
+    engines: ANDROID_LIVE_ENGINES,
   },
 
   // ⑤ 路线 5: Web 浏览器 · 影视点播 · 主界面
@@ -282,12 +285,34 @@ export function getPlaybackRouteConfig({ runtime, kind = MEDIA_KIND.VOD, viewTie
  */
 export function resolveEngineSelection(selectedId, currentRoute) {
   const isAndroid = currentRoute.runtime === RUNTIME_ENV.ANDROID;
-  
+
   if (isAndroid) {
-    // Android video pixels are rendered by the page's own HTMLVideoElement.
-    // Legacy IJK/Exo IDs from persisted settings intentionally normalize to the
-    // safe auto strategy rather than reporting a native engine that no longer
-    // owns a visible (or hidden) Surface.
+    // Only the Android Live routes expose the dedicated native IJK/Exo backend.
+    // VOD and browser paths remain page-owned HTML media playback.
+    if (currentRoute.kind === MEDIA_KIND.LIVE) {
+      const nativeScheme = {
+        ijk_hardware: { engine: 'ijk', decoder: 'hardware' },
+        ijk_software: { engine: 'ijk', decoder: 'software' },
+        exo_hardware: { engine: 'exo', decoder: 'hardware' },
+        exo_software: { engine: 'exo', decoder: 'software' },
+      }[selectedId];
+      if (nativeScheme) {
+        return {
+          engine: nativeScheme.engine,
+          decoder: nativeScheme.decoder,
+          mode: 'live_native',
+          isWeb: false,
+          playerHint: {
+            engine: nativeScheme.engine,
+            decoder: nativeScheme.decoder,
+            live: true,
+            nativeLivePlayer: true,
+            routeId: currentRoute.routeKey,
+          },
+        };
+      }
+    }
+
     let mode = 'auto';
     if (selectedId === 'hls_worker') mode = 'hls_worker';
     else if (selectedId === 'hls_lowlatency') mode = 'hls_lowlatency';

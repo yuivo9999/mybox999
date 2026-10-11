@@ -1,6 +1,7 @@
 import { PlaybackFailureCode, PlaybackKind } from './core__models__playback.js';
 import { parserService } from './core__parsers__parserService.js';
 import { createHtml5PlayerAdapter } from './core__player__html5PlayerAdapter.js';
+import { createAndroidLivePlayerAdapter } from './core__player__androidLivePlayerAdapter.js';
 import { PlayerState } from './core__player__playerInterface.js';
 import { createPlaybackEventBus } from './core__playback__playbackEventBus.js';
 import { createPlaybackStateMachine } from './core__playback__playbackStateMachine.js';
@@ -62,16 +63,21 @@ export function createPlaybackCore(task,hooks={}) {
  const attachPlayer=(element)=>{
   operationEpoch+=1;
   player?.release?.(); playerElement=element;
-  // All platforms use the page-owned HTMLMediaElement as the actual video surface.
-  // Android native playback engines are intentionally not attached: their Activity-level
-  // TextureView cannot inherit DOM scroll, clipping, or layout.
   if(element) {
    const isAndroidWebView = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
-   player=createHtml5PlayerAdapter(element,{
-    onEvent:handlePlayerEvent,
-    requireVideoFrame:isAndroidWebView,
-    allowMixedContent:isAndroidWebView,
-   });
+   const isAndroidLive = isAndroidWebView && task.request.kind === PlaybackKind.LIVE;
+   if (isAndroidLive) {
+    // Android Live owns a separate adapter that can switch between dedicated
+    // IJK/Exo native sessions and the existing in-page HTML5/HLS path. VOD and
+    // all browser playback remain bound to the page-owned HTMLMediaElement.
+    player=createAndroidLivePlayerAdapter(element,{onEvent:handlePlayerEvent});
+   } else {
+    player=createHtml5PlayerAdapter(element,{
+     onEvent:handlePlayerEvent,
+     requireVideoFrame:isAndroidWebView,
+     allowMixedContent:isAndroidWebView,
+    });
+   }
   } else return null;
   return player;
  };
@@ -112,14 +118,28 @@ export function createPlaybackCore(task,hooks={}) {
   if(!player)throw new Error('PLAYER_ADAPTER_NOT_ATTACHED');
   if(!isOperationCurrent(epoch))return null;
   const playbackSettings = userDataService.getSettings().playback;
-  const isAndroidDomPlayer = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
-  const defaultEngine = isAndroidDomPlayer
-   ? 'html5'
+  const isAndroidHost = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
+  const isAndroidLive = isAndroidHost && task.request.kind === PlaybackKind.LIVE;
+  const configuredLiveScheme = String(playbackSettings.livePlaybackScheme || 'ijk_hardware').toLowerCase();
+  const configuredLiveEngine = configuredLiveScheme.startsWith('exo_') ? 'exo' : configuredLiveScheme.startsWith('ijk_') ? 'ijk' : 'html5';
+  const configuredLiveDecoder = configuredLiveScheme.endsWith('_software') ? 'software' : (configuredLiveEngine === 'html5' ? 'browser_auto' : 'hardware');
+  const defaultEngine = isAndroidHost
+   ? (isAndroidLive ? configuredLiveEngine : 'html5')
    : (task.request.kind === PlaybackKind.LIVE ? (playbackSettings.livePlayer || 'ijk') : (playbackSettings.moviePlayer || 'ijk'));
+  const requestedEngine = input.playerHint?.engine ?? defaultEngine;
+  const canUseDedicatedLiveEngine = isAndroidLive && ['ijk', 'exo'].includes(String(requestedEngine).toLowerCase());
+  const effectiveEngine = isAndroidHost && !canUseDedicatedLiveEngine ? 'html5' : requestedEngine;
+  const requestedDecoder = input.playerHint?.decoder ?? (
+   isAndroidLive && String(requestedEngine).toLowerCase() === configuredLiveEngine
+    ? configuredLiveDecoder
+    : (playbackSettings.decoder?.[requestedEngine] ?? 'hardware')
+  );
+  const effectiveDecoder = isAndroidHost && !canUseDedicatedLiveEngine ? 'browser_auto' : requestedDecoder;
   const playerHint = {
    ...(input.playerHint ?? {}),
-   engine: isAndroidDomPlayer ? 'html5' : (input.playerHint?.engine ?? defaultEngine),
-   decoder: isAndroidDomPlayer ? 'browser_auto' : (input.playerHint?.decoder ?? playbackSettings.decoder?.[defaultEngine] ?? 'hardware'),
+   engine: effectiveEngine,
+   decoder: effectiveDecoder,
+   nativeLivePlayer: Boolean(canUseDedicatedLiveEngine),
    decoderModes: input.playerHint?.decoderModes ?? playbackSettings.decoder ?? {},
    fallbackEnabled: input.playerHint?.fallbackEnabled ?? playbackSettings.fallbackEnabled,
    fallbackOrder: input.playerHint?.fallbackOrder ?? playbackSettings.fallbackOrder,

@@ -3256,6 +3256,23 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
   color: #edf4fd; background: linear-gradient(155deg, #13253a, #091522 70%, #07101a);
   box-shadow: 0 -16px 50px rgba(0,0,0,.4); animation: live-immersive-sheet-in .18s ease-out;
 }
+/* Channel selection is a centered, bounded dialog rather than a full-height bottom sheet. */
+.live-immersive-menu-backdrop.is-channel-picker { align-items: center; padding: 14px; }
+.live-immersive-menu-sheet.is-channel-picker {
+  width: min(100%, 440px);
+  height: min(52dvh, 500px);
+  min-height: 270px;
+  max-height: 62dvh;
+  padding: 12px;
+  border-bottom: 1px solid rgba(139,174,216,.19);
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.45);
+}
+.live-immersive-menu-sheet.is-channel-picker .live-immersive-sheet-grabber { margin-bottom: 10px; }
+.live-immersive-menu-sheet.is-channel-picker .live-immersive-sheet-heading { flex: 0 0 auto; padding-bottom: 10px; }
+.live-immersive-menu-sheet.is-channel-picker .live-immersive-channel-picker { flex: 1 1 auto; overflow: hidden; }
+.live-immersive-menu-sheet.is-channel-picker .live-immersive-menu-list.channel-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+.live-immersive-menu-sheet.is-channel-picker .live-immersive-option-row { min-height: 54px; }
 .live-immersive-sheet-grabber { align-self: center; width: 38px; height: 4px; margin: 0 0 14px; border-radius: 999px; background: rgba(190,210,236,.36); }
 .live-immersive-sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 12px; border-bottom: 1px solid rgba(148,178,214,.12); }
 .live-immersive-sheet-heading > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -3379,9 +3396,9 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
   inset: 0;
   z-index: 100050;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: max(14px, env(safe-area-inset-top, 0px)) 18px max(14px, env(safe-area-inset-bottom, 0px));
   background: rgba(0, 4, 11, .7);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
@@ -3390,18 +3407,18 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
 .aspect-settings-sheet {
   display: flex;
   flex-direction: column;
-  width: min(100%, 560px);
-  max-height: min(90dvh, 820px);
-  min-height: 0;
+  width: min(100%, 430px);
+  height: min(44dvh, 390px);
+  max-height: min(66dvh, 560px);
+  min-height: 250px;
   border: 1px solid rgba(149, 181, 222, .17);
-  border-bottom: 0;
-  border-radius: 23px 23px 0 0;
+  border-radius: 20px;
   overflow: hidden;
   background: linear-gradient(160deg, #101d2c 0%, #0a121e 48%, #080d15 100%);
-  box-shadow: 0 -18px 60px rgba(0, 0, 0, .45);
+  box-shadow: 0 16px 54px rgba(0, 0, 0, .48);
   animation: aspect-settings-sheet-in .2s ease-out;
 }
-.aspect-settings-grabber { align-self: center; flex: 0 0 auto; width: 38px; height: 4px; margin: 9px 0 0; border-radius: 99px; background: rgba(195, 215, 241, .34); }
+.aspect-settings-grabber { display: none; }
 .aspect-settings-header {
   display: flex;
   flex: 0 0 auto;
@@ -3416,7 +3433,7 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
 .aspect-settings-header strong { color: #f5f8fd; font-size: 17px; font-weight: 780; }
 .aspect-settings-header small { color: #91a7c1; font-size: 11px; line-height: 1.4; }
 .aspect-settings-header > button { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(155, 184, 220, .12); border-radius: 11px; color: #c7d8ee; background: rgba(255, 255, 255, .06); }
-.aspect-settings-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 0 14px calc(15px + env(safe-area-inset-bottom, 0px)); }
+.aspect-settings-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 0 14px 12px; }
 .aspect-settings-section { padding: 15px 0 1px; }
 .aspect-settings-section + .aspect-settings-section { margin-top: 12px; border-top: 1px solid rgba(144, 177, 216, .1); }
 .aspect-settings-section-title { display: flex; flex-direction: column; gap: 4px; margin: 0 1px 10px; }
@@ -3487,14 +3504,10 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
 .live-immersive-ratio-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 11px; border: 1px solid rgba(213, 165, 90, .28); border-radius: 11px; color: #f1d09a; background: rgba(213, 165, 90, .09); font-size: 12px; font-weight: 700; white-space: nowrap; }
 @keyframes aspect-settings-sheet-in { from { transform: translateY(18px); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
 @media (orientation: landscape) and (min-width: 560px) {
-  .aspect-settings-backdrop { align-items: center; padding: 14px; }
-  .aspect-settings-sheet { width: min(760px, calc(100vw - 28px)); max-height: 92dvh; border-bottom: 1px solid rgba(149, 181, 222, .17); border-radius: 20px; }
-  .aspect-settings-grabber { display: none; }
-  .aspect-settings-scroll { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; }
-  .aspect-settings-section { align-self: start; }
-  .aspect-settings-section:nth-child(1), .aspect-settings-section:nth-child(2), .aspect-settings-section:nth-child(3) { grid-column: 1; }
-  .aspect-settings-section:nth-child(4), .aspect-settings-section:nth-child(5), .aspect-settings-footer { grid-column: 2; }
-  .aspect-settings-section + .aspect-settings-section { margin-top: 10px; }
+  .aspect-settings-backdrop { align-items: center; padding: 12px; }
+  .aspect-settings-sheet { width: min(78vw, 500px); height: min(72dvh, 420px); max-height: 76dvh; min-height: 220px; border-radius: 18px; }
+  .aspect-settings-scroll { display: block; }
+  .aspect-settings-section + .aspect-settings-section { margin-top: 9px; }
 }
 @media (max-width: 360px) {
   .aspect-settings-scroll { padding-right: 10px; padding-left: 10px; }
@@ -3511,3 +3524,191 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,5
 .sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="crop"] .live-immersive-video .sangtian-video-element,
 .sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="fill"] .live-immersive-video .sangtian-video-element { object-fit: cover !important; }
 .sangtian-window.is-live-direct.is-immersive:not(.is-system-fullscreen):not(.is-web-fullscreen)[data-fit-mode="stretch"] .live-immersive-video .sangtian-video-element { object-fit: fill !important; }
+
+.live-current-actions .live-play-btn:disabled { opacity: .58; box-shadow: none; cursor: default; }
+
+
+/* Live 播放导航栏：浮在视频画面上，适配主界面、沉浸界面与全屏。 */
+.sangtian-window.is-live-direct .live-playback-nav {
+  position: absolute;
+  z-index: 30;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px 7px 5px 11px;
+  border: 1px solid rgba(210, 226, 247, .18);
+  border-radius: 13px;
+  color: #f5f8fd;
+  background: rgba(5, 12, 22, .78);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .28);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+.sangtian-window.is-live-direct .live-playback-nav-title {
+  flex: 0 0 auto;
+  color: #c2d2e8;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.sangtian-window.is-live-direct .live-playback-nav-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+.sangtian-window.is-live-direct .live-playback-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 55px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(192, 211, 237, .17);
+  border-radius: 9px;
+  color: #eff6ff;
+  background: rgba(255, 255, 255, .075);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.sangtian-window.is-live-direct .live-playback-nav-btn:active {
+  background: rgba(255, 255, 255, .18);
+  transform: scale(.97);
+}
+.sangtian-window.is-live-direct .live-playback-nav-btn.is-refresh {
+  color: #d4e8ff;
+  border-color: rgba(106, 170, 245, .25);
+  background: rgba(51, 112, 184, .2);
+}
+.sangtian-window.is-live-direct .live-playback-nav.is-fullscreen {
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+}
+@media (max-width: 360px) {
+  .sangtian-window.is-live-direct .live-playback-nav {
+    left: 6px;
+    right: 6px;
+    gap: 5px;
+    padding-left: 8px;
+  }
+  .sangtian-window.is-live-direct .live-playback-nav-title { display: none; }
+  .sangtian-window.is-live-direct .live-playback-nav-actions { gap: 4px; }
+  .sangtian-window.is-live-direct .live-playback-nav-btn {
+    min-width: 50px;
+    gap: 4px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+}
+
+/* Final Live playback touch refinements: compact host bar, tappable auto-hide nav, visible active URL. */
+.sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar {
+  height: 32px;
+  min-height: 32px;
+  justify-content: flex-end;
+  padding: 0 8px;
+}
+.sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-actions {
+  gap: 5px;
+  min-width: 0;
+}
+.sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-btn {
+  min-height: 27px;
+  padding: 2px 8px;
+  gap: 4px;
+  line-height: 1;
+}
+.sangtian-window.is-live-direct .live-playback-nav {
+  transition: opacity .18s ease, transform .18s ease;
+}
+.sangtian-window.is-live-direct .live-playback-nav.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+}
+.live-stream-address {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-width: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.live-stream-address-label {
+  padding-top: 1px;
+  color: #a0a8b7;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.live-stream-address code {
+  display: block;
+  min-width: 0;
+  color: #c7d5eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+@media (max-width: 560px) {
+  .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar {
+    height: 30px;
+    min-height: 30px;
+    padding: 0 6px;
+  }
+  .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-actions {
+    gap: 4px;
+  }
+  .sangtian-window.is-live-direct .sangtian-window-bar.is-live-player-bar .sangtian-window-btn {
+    min-width: 29px;
+    min-height: 25px;
+    padding: 1px 6px;
+  }
+  .live-stream-address {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .live-stream-address code {
+    font-size: 10px;
+  }
+}
+
+/* Keep the visual countdown aligned with the 15-second tap-to-hide delay. */
+.sangtian-window.is-live-direct .sangtian-control-hide-countdown { animation-duration: 15s; }
+
+
+/* Android Live IJK/Exo native texture is composited below the WebView. Keep
+   the DOM player controls above it while making only its ancestor backgrounds
+   transparent enough for the native video viewport to remain visible. */
+html.android-live-native-active,
+html.android-live-native-active body,
+html.android-live-native-active #root,
+.android-live-native-transparent-ancestor {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+.sangtian-window.is-android-live-native,
+.sangtian-window.is-android-live-native .sangtian-window-body {
+  background: transparent !important;
+}
+.sangtian-window.is-android-live-native .sangtian-video-element {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

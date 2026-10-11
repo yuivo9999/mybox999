@@ -2,9 +2,9 @@ import { DEFAULT_FONT_ID } from './me/preferences.js';
 
 export const PLAYBACK_SCHEMES = Object.freeze([
   Object.freeze({ id: 'ijk_hardware', label: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', platform: 'android' }),
+  Object.freeze({ id: 'ijk_software', label: 'IJKPlayer 软解', engine: 'ijk', decoder: 'software', platform: 'android' }),
   Object.freeze({ id: 'exo_hardware', label: 'ExoPlayer 硬解', engine: 'exo', decoder: 'hardware', platform: 'android' }),
   Object.freeze({ id: 'exo_software', label: 'ExoPlayer 软解', engine: 'exo', decoder: 'software', platform: 'android' }),
-  Object.freeze({ id: 'ijk_software', label: 'IJKPlayer 软解（旧版设置兼容）', engine: 'ijk', decoder: 'software', platform: 'android' }),
   Object.freeze({ id: 'html5_auto', label: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', platform: 'android' }),
   Object.freeze({ id: 'hls_lowlatency', label: 'HLS.js 低延时内核', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', platform: 'both' }),
   Object.freeze({ id: 'html5_hardware', label: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', platform: 'both' }),
