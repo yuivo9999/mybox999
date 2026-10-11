@@ -120,7 +120,7 @@ export function createPlaybackCore(task,hooks={}) {
   const playbackSettings = userDataService.getSettings().playback;
   const isAndroidHost = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
   const isAndroidLive = isAndroidHost && task.request.kind === PlaybackKind.LIVE;
-  const configuredLiveScheme = String(playbackSettings.livePlaybackScheme || 'ijk_hardware').toLowerCase();
+  const configuredLiveScheme = String(playbackSettings.livePlaybackScheme || 'html5_auto').toLowerCase();
   const configuredLiveEngine = configuredLiveScheme.startsWith('exo_') ? 'exo' : configuredLiveScheme.startsWith('ijk_') ? 'ijk' : 'html5';
   const configuredLiveDecoder = configuredLiveScheme.endsWith('_software') ? 'software' : (configuredLiveEngine === 'html5' ? 'browser_auto' : 'hardware');
   const defaultEngine = isAndroidHost

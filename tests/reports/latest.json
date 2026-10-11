@@ -1,0 +1,98 @@
+{
+  "project_root": "/mnt/data/mybox-build-work/mybox999-main",
+  "generated_at_utc": "2026-10-11T13:16:37.291336+00:00",
+  "mode": "static plus explicitly selected operations",
+  "counts": {
+    "PASS": 9,
+    "WARN": 1,
+    "FAIL": 0,
+    "UNVERIFIED": 0
+  },
+  "results": [
+    {
+      "category": "apk",
+      "check": "android-directory",
+      "status": "PASS",
+      "message": "发现 android/ 目录。",
+      "evidence": []
+    },
+    {
+      "category": "apk",
+      "check": "Gradle wrapper",
+      "status": "PASS",
+      "message": "找到 2 个相关文件。",
+      "evidence": [
+        "android/gradlew",
+        "android/gradlew.bat"
+      ]
+    },
+    {
+      "category": "apk",
+      "check": "app Gradle config",
+      "status": "PASS",
+      "message": "找到 1 个相关文件。",
+      "evidence": [
+        "android/app/build.gradle"
+      ]
+    },
+    {
+      "category": "apk",
+      "check": "AndroidManifest",
+      "status": "PASS",
+      "message": "找到 1 个相关文件。",
+      "evidence": [
+        "android/app/src/main/AndroidManifest.xml"
+      ]
+    },
+    {
+      "category": "apk",
+      "check": "Gradle settings",
+      "status": "PASS",
+      "message": "找到 1 个相关文件。",
+      "evidence": [
+        "android/settings.gradle"
+      ]
+    },
+    {
+      "category": "apk",
+      "check": "wrapper properties",
+      "status": "PASS",
+      "message": "找到 1 个相关文件。",
+      "evidence": [
+        "android/gradle/wrapper/gradle-wrapper.properties"
+      ]
+    },
+    {
+      "category": "apk",
+      "check": "java-runtime",
+      "status": "PASS",
+      "message": "Java 可执行文件：/usr/bin/java",
+      "evidence": []
+    },
+    {
+      "category": "integration",
+      "check": "android-public-assets",
+      "status": "PASS",
+      "message": "发现 Android public 资源目录，含 7 个文件。",
+      "evidence": [
+        "android/app/src/main/assets/public"
+      ]
+    },
+    {
+      "category": "integration",
+      "check": "android-public-index",
+      "status": "PASS",
+      "message": "Android 内置 public/index.html 存在。",
+      "evidence": [
+        "android/app/src/main/assets/public/index.html"
+      ]
+    },
+    {
+      "category": "integration",
+      "check": "bundle-name-overlap",
+      "status": "WARN",
+      "message": "源资源与 Android 资源按文件名匹配 0 个文件。文件名不同可能是构建哈希变化，不足以单独证明资源过期。",
+      "evidence": []
+    }
+  ]
+}

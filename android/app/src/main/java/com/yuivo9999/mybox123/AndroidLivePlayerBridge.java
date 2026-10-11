@@ -276,7 +276,7 @@ public final class AndroidLivePlayerBridge {
 
         DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(activity)
             .setMediaCodecSelector(createCodecSelector(activeDecoder))
-            .setEnableDecoderFallback(false);
+            .setEnableDecoderFallback(true);
         DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true);
         JSONObject headers = request.optJSONObject("headers");

@@ -125,7 +125,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     const saved = settings?.playback?.livePlaybackScheme;
     const candidate = globalLiveCache.decoderEngine || saved;
     const allowedAndroidSchemes = ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software', 'html5_auto', 'hls_lowlatency', 'html5_hardware'];
-    return allowedAndroidSchemes.includes(candidate) ? candidate : 'ijk_hardware';
+    return allowedAndroidSchemes.includes(candidate) ? candidate : 'html5_auto';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
