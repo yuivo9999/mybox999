@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for rebuilding the web bundle, synchronizing fresh assets containing TVBoxLivePlayerBridge into Android assets, and restoring the GitHub Actions APK build workflow.",
-  "updatedAt":  "2026-10-11T01:25:44.450425024Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
