@@ -62,9 +62,9 @@ export function getRuntimeCapabilities() {
     runtime: isAndroid ? RUNTIME_ENV.ANDROID : RUNTIME_ENV.WEB,
     isAndroid,
     isWeb: isBrowser,
-    // IJK/Exo are available only through the dedicated Android Live route;
-    // the legacy generic native-player capability remains intentionally disabled.
-    supportsExoPlayer: isAndroid,
+    // Only the dedicated Android Live IJK hardware path is supported.
+    // Keep the Exo capability false so legacy code cannot advertise Exo as available.
+    supportsExoPlayer: false,
     supportsIjkPlayer: isAndroid,
     supportsAndroidNativePlayer: false,
     supportsHlsJs: hasMediaSource,
@@ -90,13 +90,19 @@ const ANDROID_VOD_DOM_ENGINES = [
 
 const ANDROID_LIVE_ENGINES = [
   { id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', mode: 'live_native', isNative: true, badge: '默认' },
-  { id: 'ijk_software', name: 'IJKPlayer 软解', engine: 'ijk', decoder: 'software', mode: 'live_native', isNative: true },
-  { id: 'exo_hardware', name: 'ExoPlayer 硬解', engine: 'exo', decoder: 'hardware', mode: 'live_native', isNative: true },
-  { id: 'exo_software', name: 'ExoPlayer 软解', engine: 'exo', decoder: 'software', mode: 'live_native', isNative: true },
+  // HTML5/HLS remain separate browser-media fallbacks; only native Android IJK hard decode is exposed.
   { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', isNative: false },
   { id: 'hls_lowlatency', name: 'HLS.js 低延迟直播', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', isNative: false },
   { id: 'html5_hardware', name: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', isNative: false },
 ];
+
+const ANDROID_LIVE_SCHEMES = new Set(['ijk_hardware', 'html5_auto', 'hls_lowlatency', 'html5_hardware']);
+
+/** Convert older persisted Android live choices to the supported IJK hardware or HTML5 routes. */
+export function normalizeAndroidLivePlaybackScheme(value) {
+  const scheme = String(value || '').toLowerCase();
+  return ANDROID_LIVE_SCHEMES.has(scheme) ? scheme : 'ijk_hardware';
+}
 
 /**
  * 8 条路线标准化配置字典
@@ -150,7 +156,7 @@ const ROUTE_DEFINITIONS = {
     networkChannel: 'android_live_player',
     surfaceSync: true,
     uiLayout: 'native_video_under_webview',
-    description: 'Android Live 使用独立 IJK / Exo 原生播放器或页面内 HTML5 播放器，原生视频区域跟随直播窗口同步',
+    description: 'Android Live 默认使用 IJK 硬件解码；HTML5/HLS 作为独立网页媒体回退路径，原生视频区域跟随直播窗口同步',
     engines: ANDROID_LIVE_ENGINES,
   },
 
@@ -189,8 +195,6 @@ const ROUTE_DEFINITIONS = {
     engines: [
       { id: 'hls_worker', name: 'HLS.js 增强内核 (Worker 分片加速)', engine: 'html5', mode: 'hls_worker', isNative: false },
       { id: 'html5_hardware', name: 'HTML5 原生硬解 (浏览器硬件加速)', engine: 'html5', mode: 'native_hardware', isNative: false },
-      { id: 'exo_hardware', name: 'ExoPlayer (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_worker', isNative: false, badge: 'APK专享' },
-      { id: 'ijk_software', name: 'IJKPlayer (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_worker', isNative: false, badge: 'APK专享' },
     ],
   },
 
@@ -211,7 +215,6 @@ const ROUTE_DEFINITIONS = {
     engines: [
       { id: 'hls_worker', name: 'HLS.js 大缓冲内核 (影院平滑模式)', engine: 'html5', mode: 'hls_worker', isNative: false },
       { id: 'html5_hardware', name: 'HTML5 原生硬解 (低功耗模式)', engine: 'html5', mode: 'native_hardware', isNative: false },
-      { id: 'exo_hardware', name: 'ExoPlayer (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_worker', isNative: false, badge: 'APK专享' },
     ],
   },
 
@@ -232,10 +235,6 @@ const ROUTE_DEFINITIONS = {
     engines: [
       { id: 'hls_lowlatency', name: 'HLS.js 低延时内核 (直播追帧首选)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'Web首选' },
       { id: 'html5_hardware', name: 'HTML5 原生解码 (硬件加速)', engine: 'html5', mode: 'native_hardware', isNative: false, badge: '浏览器硬解' },
-      { id: 'ijk_hardware', name: 'IJKPlayer 硬解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'ijk_software', name: 'IJKPlayer 软解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'exo_hardware', name: 'ExoPlayer 硬解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'exo_software', name: 'ExoPlayer 软解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
     ],
   },
 
@@ -256,10 +255,6 @@ const ROUTE_DEFINITIONS = {
     engines: [
       { id: 'hls_lowlatency', name: 'HLS.js 沉浸直播引擎 (自动重试/追帧)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'Web首选' },
       { id: 'html5_hardware', name: 'HTML5 原生解码 (硬件加速)', engine: 'html5', mode: 'native_hardware', isNative: false, badge: '浏览器硬解' },
-      { id: 'ijk_hardware', name: 'IJKPlayer 硬解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'ijk_software', name: 'IJKPlayer 软解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'exo_hardware', name: 'ExoPlayer 硬解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
-      { id: 'exo_software', name: 'ExoPlayer 软解 (APK专享 · Web自动降级)', engine: 'html5', mode: 'hls_lowlatency', isNative: false, badge: 'APK专享' },
     ],
   },
 };
@@ -287,14 +282,15 @@ export function resolveEngineSelection(selectedId, currentRoute) {
   const isAndroid = currentRoute.runtime === RUNTIME_ENV.ANDROID;
 
   if (isAndroid) {
-    // Only the Android Live routes expose the dedicated native IJK/Exo backend.
+    // Only the Android Live routes expose the dedicated native IJK hardware backend.
     // VOD and browser paths remain page-owned HTML media playback.
     if (currentRoute.kind === MEDIA_KIND.LIVE) {
+      // Legacy native IDs are mapped to the sole supported native route, never to Exo or software decode.
       const nativeScheme = {
         ijk_hardware: { engine: 'ijk', decoder: 'hardware' },
-        ijk_software: { engine: 'ijk', decoder: 'software' },
-        exo_hardware: { engine: 'exo', decoder: 'hardware' },
-        exo_software: { engine: 'exo', decoder: 'software' },
+        ijk_software: { engine: 'ijk', decoder: 'hardware' },
+        exo_hardware: { engine: 'ijk', decoder: 'hardware' },
+        exo_software: { engine: 'ijk', decoder: 'hardware' },
       }[selectedId];
       if (nativeScheme) {
         return {
