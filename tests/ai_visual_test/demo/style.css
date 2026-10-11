@@ -1,0 +1,26 @@
+:root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f4f7fb; background: #10151e; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, select { font: inherit; }
+button { border: 1px solid #526078; border-radius: 10px; padding: 9px 14px; color: #f5f7fc; background: #28354a; cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 3px solid #f2c66d; outline-offset: 2px; }
+.app-shell { width: min(100%, 1120px); margin: 0 auto; padding: 20px; }
+.topline { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 16px; }
+.topline strong { font-size: 22px; margin-right: 12px; }
+.muted { color: #adb9cc; }
+.test-badge { border: 1px solid #d7a34f; color: #f7d49b; border-radius: 999px; padding: 5px 9px; font-size: 11px; letter-spacing: .08em; }
+.player { position: relative; min-height: 280px; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #344154; border-radius: 16px; background: radial-gradient(ellipse at 50% 30%, #2a3b53, #090d13 75%); display: grid; place-items: center; }
+.screen-mark { position: absolute; top: 16px; left: 16px; color: #8c9bb1; font-size: 11px; letter-spacing: .14em; }
+.player-message { text-align: center; line-height: 1.8; color: #d9e2ee; }
+.player-message small { color: #94a3b8; }
+.nav-bar { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 10px; border: 1px solid #516079; border-radius: 12px; background: rgb(10 16 26 / 88%); transition: opacity .12s ease; }
+.nav-bar.is-hidden { display: none; }
+.info-card { margin-top: 18px; border: 1px solid #303d51; border-radius: 14px; padding: 18px; background: #171f2c; }
+.info-card h1 { margin: 0 0 10px; font-size: 20px; }
+.info-card p { line-height: 1.55; }
+.dialog { max-width: min(420px, calc(100vw - 32px)); width: 100%; border: 1px solid #64748b; border-radius: 16px; color: #f4f7fb; background: #1a2433; padding: 22px; }
+.dialog::backdrop { background: rgb(2 6 12 / 68%); }
+.dialog h2 { margin-top: 0; }
+.dialog label { display: block; margin: 16px 0; }
+.dialog select { display: block; width: 100%; margin-top: 8px; padding: 9px; color: inherit; background: #28354a; border: 1px solid #526078; border-radius: 8px; }
+@media (max-width: 480px) { .app-shell { padding: 12px; } .player { min-height: 240px; aspect-ratio: 4 / 5; } .nav-bar { left: 8px; right: 8px; bottom: 8px; gap: 6px; padding: 8px; } .nav-bar button { padding: 8px 10px; } .topline strong { font-size: 20px; } }

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyBox AI Visual Test Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topline">
+      <div><strong>MyBox</strong><span class="muted">视觉测试演示页</span></div>
+      <span class="test-badge">DEMO ONLY</span>
+    </header>
+    <section class="player" data-testid="player" aria-label="模拟视频区域">
+      <div class="screen-mark">VIDEO AREA</div>
+      <div class="player-message">这是用于验证测试工具的模拟区域<br><small>不代表真实视频播放</small></div>
+      <nav class="nav-bar" data-testid="nav-bar" aria-label="播放控制栏">
+        <button type="button" data-testid="nav-toggle" aria-label="隐藏导航栏">隐藏导航</button>
+        <button type="button" data-testid="channel-button">选台</button>
+        <button type="button" data-testid="ratio-button">画面比例</button>
+      </nav>
+    </section>
+    <section class="info-card">
+      <h1>浏览器视觉自动化测试</h1>
+      <p>此页面用于确认本地端口、DOM 定位、弹窗、截图和视觉回归工具能否工作。</p>
+      <p class="muted">要验证实际 MyBox 页面，请把服务器根目录指向真实页面资源，并替换测试配置中的选择器。</p>
+    </section>
+  </main>
+  <dialog data-testid="channel-dialog" class="dialog">
+    <h2>选择频道</h2><p>模拟频道列表，用于测试弹窗尺寸与显示状态。</p>
+    <button type="button" data-testid="close-channel-dialog">关闭</button>
+  </dialog>
+  <dialog data-testid="ratio-dialog" class="dialog">
+    <h2>画面比例</h2><p>模拟画面比例设置。</p>
+    <label>比例 <select aria-label="画面比例"><option>自动</option><option>16:9</option><option>4:3</option><option>铺满</option></select></label>
+    <button type="button" data-testid="close-ratio-dialog">关闭</button>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>
