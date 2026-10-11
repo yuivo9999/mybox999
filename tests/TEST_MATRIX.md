@@ -9,18 +9,13 @@
 | DOM 视频 | 静态搜寻 video/WebView/播放/全屏错误处理线索 | 实际 DOM 状态、视频解码、原生 WebView 行为 | 否 |
 | 集成 | 前端入口与 Android 预置资源存在性/引用线索 | 确认二者为同次构建、实际加载版本 | 否 |
 | 回归 | 关键文件与检查覆盖率提示 | 按本次改动定义场景并执行 | 否 |
-| AI 视觉 | `--visual` 自检 Demo；`--visual-app` 启动真实 Vite 页面进入 LIVE；元素可见性/几何、手机宽度溢出、交互、控制台/请求错误、截图、trace、基线对比与 AI 复核清单 | Python Playwright/pytest/Pillow、可用 Chromium、真实页面启动及资源环境 | 运行时会写 `tests/ai_visual_test/reports/` 和 `artifacts/`；真实页面模式只从经过校验的本地离线归档恢复缺失依赖，正常构建不联网下载 |
-
-状态必须区分 PASS、WARN、FAIL、BLOCKED、UNVERIFIED。没有运行的测试、缺少真实页面的测试及无法由静态分析证明的行为，均不得描述为已经通过。
-
-## AI 视觉复核补充要求
-
-- `python tests/run_tests.py --visual` 仅验证 Demo 测试链路；真实应用 UI 必须使用 `python tests/run_tests.py --visual-app` 或等效的真实页面配置。
-- 真实页面模式会自动进入配置指定的 LIVE 页面并在 320/360/390/412 CSS px 宽度下截图及检查，测试目标、选择器与启动动作保存在 `tests/ai_visual_test/config.mybox.example.json`。
-- 测试摘要、截图联系表、元素几何 JSON、浏览器错误信息和 trace 均应保留为诊断证据。联系表只供快速浏览，不代替原始截图。
-- `AI_REVIEW.md` 的视觉结论默认是 `PENDING`。只有 AI/开发者实际查看真实页面截图后，才可据证据填写 PASS/FAIL/UNVERIFIED。
-
 | 构建工具链 | 预置前端依赖 manifest/文件存在性、同步和 APK 校验工具接线 | `--build-doctor`、离线归档恢复、前端真实构建、Capacitor copy、SHA-256 内容比较、Gradle 编译和 APK 内容核验 | 只有显式调用 `--frontend-bundle-prepare`、`--android-assets-sync` 或 `--android-build-pipeline` 时才可能安装/构建/写资源；普通静态检查不联网、不构建 |
+
+状态必须区分 PASS、WARN、FAIL、BLOCKED、UNVERIFIED。没有运行的测试及无法由静态分析证明的行为，均不得描述为已经通过。
+
+## UI 改动的测试限制
+
+本项目禁止 AI 视觉测试：不得运行或添加浏览器截图审查、截图比较、视觉基线、Playwright/Chromium 视觉用例或 AI 视觉复核工具。UI 改动只使用源码审查、适用的静态/资源检查及现有非视觉功能测试；不得把这些检查表述为视觉审美验收。
 
 ## 资源新鲜度验收
 

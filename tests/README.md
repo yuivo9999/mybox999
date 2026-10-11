@@ -2,7 +2,7 @@
 
 # AI 辅助开发工具箱（随项目源码保存）
 
-本目录及其中的脚本、依赖缓存和浏览器工具主要服务于 AI 助手在当前开发执行环境中的工作。它们不是 MyBox APP 的产品功能、运行时依赖或最终 APK 的组成部分。工具可以检查和构建真实项目，但不因此成为产品需求。
+本目录及其中的脚本和依赖缓存主要服务于 AI 助手在当前开发执行环境中的工作。它们不是 MyBox APP 的产品功能、运行时依赖或最终 APK 的组成部分。工具可以检查和构建真实项目，但不因此成为产品需求。
 
 默认执行的是**静态检查**，不安装依赖、不执行前端构建、不执行 APK 构建，也不连接 Android 实机。有副作用的动作必须通过明确命令启用。不要为了下载或安装 AI 助手自身的工具而修改产品部署流程或新增专用 CI/YAML 工作流。缺少可选工具时，应记录阻塞并继续完成其他可交付工作，不要让非关键环境问题拖延整体交付。
 
@@ -19,7 +19,6 @@
 - `dom_video/`：静态搜索 DOM 视频元素、播放事件、WebView 桥接/全屏接口等线索；不等价于真实设备播放验证。
 - `integration/`：Android 内置 `assets/public` 与前端入口的链接关系检查。
 - `regression/`：确认关键项目文件和测试定义是否存在，并汇总诊断状态。
-- `ai_visual_test/`：Playwright/Chromium 浏览器视觉测试，包括 Demo 自检、真实 Vite 页面测试、DOM 定位、坐标/尺寸、手机视口溢出、截图、错误监控、视觉基线、trace、截图联系表与 AI 视觉复核记录。
 
 ## 快速开始
 
@@ -41,7 +40,6 @@ python tests/run_tests.py --only apk
 python tests/run_tests.py --only dom_video
 python tests/run_tests.py --only integration
 python tests/run_tests.py --only regression
-python tests/run_tests.py --only ai_visual
 ```
 
 ## Vite 缺失时：预置离线依赖，不在正常构建时随机下载
@@ -69,7 +67,7 @@ python tests/environment/build_doctor.py
 
 `--prepare` 是显式维护操作，可能联网；`--restore` 与 `--verify` 不下载依赖。锁文件、项目依赖声明、Node 主版本、操作系统或 CPU 架构不匹配时，恢复应立即停止。
 
-## 显式启用依赖安装、构建或浏览器测试
+## 显式启用依赖安装或构建
 
 这些操作默认关闭，只有在明确指定参数时才会尝试执行：
 
@@ -85,24 +83,13 @@ python tests/run_tests.py --frontend-build
 
 # 执行 Android Gradle assembleDebug（不安装、不运行 APK、不连接设备）
 python tests/run_tests.py --apk-build
-
-# 启动内置 Demo 的本地 HTTP 服务并执行 Playwright 测试
-python tests/run_tests.py --visual
 ```
 
 `--install-node-deps`、`--frontend-build`、`--apk-build` 彼此独立。需要同时执行时，需显式同时给出参数。执行依赖安装或构建前，先检查当前分支、项目配置与网络/SDK 环境。当前环境若没有 Android SDK、Gradle wrapper 或下载权限，APK 构建可能无法运行；报告会记录失败原因，不会声称通过。
 
-## 真实页面视觉验证与 AI 复核
+## UI 改动验证边界
 
-`python tests/run_tests.py --visual-app` 会通过项目中的 `tests/frontend/run-vite.mjs` 启动真实 MyBox Vite 页面，使用 `config.mybox.example.json` 点击底部“直播”导航，再检查 LIVE 主界面。该命令是显式的运行型检查；如果 Vite 缺失，只会尝试从已验证的本地预置归档恢复，不会在正常启动过程中临时联网下载。若归档缺失/不匹配、环境无网络或 Chromium 不可启动，必须记录实际错误，不得把 Demo 测试当成真实页面通过。
-
-`python tests/run_tests.py --visual` 只用于测试工具自身的 Demo 自检。Demo 页面通过不能证明 MyBox 的实际 UI 已通过。
-
-每次视觉测试会在 `tests/ai_visual_test/artifacts/` 保存 PNG 截图、Playwright trace，在 `tests/ai_visual_test/reports/` 保存测试摘要、元素坐标/尺寸、控制台和资源错误信息及 `AI_REVIEW.md`。运行器会尽力生成 `contact-sheet.png` 作为截图总览。需要检查具体细节时，仍须打开原始截图，不可只看缩略图。
-
-AI/开发者必须实际查看真实页面截图，检查布局、层级、遮挡、文字截断、配色与手机视口表现；通过自动化断言不等于视觉审美验收。使用 `ai_visual_test/review-template.md` 记录结论。报告中的 AI 视觉复核会保持 `PENDING`，直到执行者实际检查截图并填写记录。
-
-要改测其他真实页面，可复制 `config.mybox.example.json`，配置 `base_url`、启动动作、关键选择器、交互及视口；不要把 Demo 专用选择器留给真实页面。Android 内置资源测试需另行确认资源确为本次源码的构建产物。
+本项目不包含 AI 视觉测试，不运行浏览器截图审查、视觉回归、截图差异比较或 AI 视觉复核。AI 助手不得重新引入这类测试工具、配置、依赖或运行命令。UI 变更通过源码审查、适用的静态检查、资源检查和现有非视觉功能测试进行验证；只有在任务需要且明确允许时，才执行前端构建。上述检查不代表已完成视觉审美验收。
 
 ## 状态解释
 
@@ -112,7 +99,7 @@ AI/开发者必须实际查看真实页面截图，检查布局、层级、遮�
 - `BLOCKED`：因为缺少必要依赖、缓存、权限或环境前置条件，操作无法继续。
 - `UNVERIFIED`：当前项目缺少可检查对象或该行为必须在其他运行环境验证。
 
-浏览器测试不能替代 Android 原生行为、真实设备 WebView、原生全屏或真实视频解码测试。DOM 视频扫描是静态架构审查，不保证直播源真实可播放。
+源码和静态检查不能替代 Android 原生行为、真实设备 WebView、原生全屏或真实视频解码测试。DOM 视频扫描是静态架构审查，不保证直播源真实可播放。
 
 ## Android 内置前端资源同步与 APK 资源验收
 

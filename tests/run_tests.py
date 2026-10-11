@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MyBox test orchestrator. Standard-library static checks; active operations are opt-in."""
 from __future__ import annotations
-import argparse, json, os, re, shutil, subprocess, sys, time, urllib.parse, urllib.request
+import argparse, json, os, re, shutil, subprocess, sys, urllib.parse
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
@@ -10,7 +10,7 @@ TESTS_DIR = Path(__file__).resolve().parent
 ROOT = TESTS_DIR.parent
 REPORT_DIR = TESTS_DIR / "reports"
 SKIP_DIRS = {".git", "node_modules", ".gradle", "build", "dist", "out", "target", "coverage", "reports", "artifacts", "__pycache__"}
-CATEGORIES = ("frontend", "dependencies", "resources", "apk", "dom_video", "integration", "regression", "ai_visual", "build_toolchain")
+CATEGORIES = ("frontend", "dependencies", "resources", "apk", "dom_video", "integration", "regression", "build_toolchain")
 
 class Result:
     def __init__(self): self.items=[]
@@ -277,64 +277,6 @@ def scan_integration(root, files, r):
         state='PASS' if not missing and not mismatched else 'FAIL'
         add(r,'integration','dist-to-android-content',state,f'按文件内容核验 dist 与 Android assets：期望 {len(expected)} 个文件，缺失 {len(missing)}，哈希不一致 {len(mismatched)}。',missing[:30]+mismatched[:30])
 
-def scan_ai_visual(root, files, r):
-    visual = root / "tests" / "ai_visual_test"
-    required = [
-        visual / "README.md",
-        visual / "conftest.py",
-        visual / "config.example.json",
-        visual / "config.mybox.example.json",
-        visual / "create_contact_sheet.py",
-        visual / "review-template.md",
-        visual / "tests" / "test_visual_smoke.py",
-        visual / "tests" / "test_visual_regression.py",
-    ]
-    missing = [str(path.relative_to(root)) for path in required if not path.is_file()]
-    add(r, "ai_visual", "visual-tool-files", "PASS" if not missing else "FAIL",
-        "视觉测试工具的核心文件齐全。" if not missing else f"视觉测试工具缺少 {len(missing)} 个核心文件。", missing)
-
-    base_config = visual / "config.mybox.example.json"
-    if not base_config.is_file():
-        add(r, "ai_visual", "mybox-config", "FAIL", "缺少真实 MyBox 页面测试配置模板。")
-    else:
-        try:
-            config = json.loads(base_config.read_text(encoding="utf-8"))
-            widths = {int(item.get("width", 0)) for item in config.get("viewports", [])}
-            expected_widths = {320, 360, 390, 412}
-            selectors = config.get("key_selectors") or []
-            startup = config.get("startup_actions") or []
-            valid = bool(config.get("ready_selector")) and bool(selectors) and bool(startup) and expected_widths.issubset(widths)
-            add(r, "ai_visual", "mybox-config", "PASS" if valid else "FAIL",
-                "真实页面配置声明了 LIVE 就绪选择器、启动动作、关键元素及 320/360/390/412px 视口。" if valid else "真实页面配置缺少必要的就绪状态、启动动作、关键元素或手机视口。",
-                [str(base_config.relative_to(root)), sorted(widths)])
-        except Exception as exc:
-            add(r, "ai_visual", "mybox-config", "FAIL", f"真实页面配置不是有效 JSON：{exc}", [str(base_config.relative_to(root))])
-
-    requirements = visual / "requirements.txt"
-    if requirements.is_file():
-        requirement_text = requirements.read_text(encoding="utf-8", errors="replace").lower()
-        required_packages = [name for name in ("pytest", "playwright", "pillow") if name not in requirement_text]
-        add(r, "ai_visual", "python-browser-dependencies", "PASS" if not required_packages else "FAIL",
-            "已声明 pytest、Playwright 和 Pillow 测试依赖。" if not required_packages else f"视觉测试依赖声明缺少：{required_packages}",
-            [str(requirements.relative_to(root))])
-    else:
-        add(r, "ai_visual", "python-browser-dependencies", "FAIL", "缺少视觉测试 Python 依赖清单。")
-
-    instructions = root / "AGENTS.md"
-    instruction_text = read_text(instructions) or ""
-    required_markers = ["--visual-app", "PENDING", "真实页面截图"]
-    missing_markers = [marker for marker in required_markers if marker not in instruction_text]
-    add(r, "ai_visual", "agent-visual-rule", "PASS" if not missing_markers else "WARN",
-        "项目级 AI 规则要求真实页面视觉复核并保留未验证状态。" if not missing_markers else f"AGENTS.md 未明确包含这些视觉验证要求：{missing_markers}",
-        [str(instructions.relative_to(root))])
-
-    runner = root / "tests" / "run_tests.py"
-    runner_text = read_text(runner) or ""
-    wired = "--visual-app" in runner_text and "create_contact_sheet.py" in runner_text and "ERR_BLOCKED_BY_ADMINISTRATOR" in (read_text(visual / "conftest.py") or "")
-    add(r, "ai_visual", "browser-runner-and-environment-reporting", "PASS" if wired else "WARN",
-        "统一测试入口支持真实 Vite 页面、截图总览和受管理 Chromium 环境的 UNVERIFIED 分类。" if wired else "真实页面启动、截图总览或浏览器策略阻塞处理可能尚未接入。",
-        [str(runner.relative_to(root)), str((visual / "conftest.py").relative_to(root))])
-
 def scan_regression(root, files, r):
     markers=['package.json','android/app/src/main/AndroidManifest.xml','android/app/src/main/assets/public/index.html']
     present=[m for m in markers if (root/m).is_file()]
@@ -342,204 +284,6 @@ def scan_regression(root, files, r):
     known=[p for p in files if p.suffix.lower() in {'.js','.css','.html','.java','.kt','.xml'}]
     add(r,'regression','change-surface','PASS' if known else 'UNVERIFIED',f'当前静态扫描发现 {len(known)} 个可审查的相关文件；这不是自动回归通过证明。',[str(p.relative_to(root)) for p in known[:40]])
     add(r,'regression','manual-scope-warning','WARN','回归范围应按本次变更文件及调用关系补充；未配置业务断言的功能不能标记为通过。')
-
-def _http_ready(url, deadline, server):
-    last_error = "尚未收到 HTTP 响应"
-    while time.time() < deadline:
-        if server is not None and server.poll() is not None:
-            return False, f"本地服务器提前退出，退出码 {server.returncode}。{last_error}"
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": "MyBox-Visual-Test/1.0"})
-            with urllib.request.urlopen(request, timeout=1) as response:
-                if 200 <= response.status < 400:
-                    return True, f"HTTP {response.status}"
-                last_error = f"HTTP {response.status}"
-        except Exception as exc:
-            last_error = str(exc)
-            time.sleep(0.25)
-    return False, f"等待本地页面超时：{last_error}"
-
-
-def _stop_visual_server(server):
-    if server is None or server.poll() is not None:
-        return
-    try:
-        if os.name != "nt":
-            import signal
-            os.killpg(server.pid, signal.SIGTERM)
-        else:
-            server.terminate()
-        server.wait(timeout=5)
-    except Exception:
-        try:
-            if os.name != "nt":
-                import signal
-                os.killpg(server.pid, signal.SIGKILL)
-            else:
-                server.kill()
-        except Exception:
-            pass
-        try:
-            server.wait(timeout=3)
-        except Exception:
-            pass
-
-
-def run_visual_tests(args, r, target):
-    visual_root = TESTS_DIR / "ai_visual_test"
-    config_name = "config.mybox.example.json" if target == "app" else "config.example.json"
-    config_path = visual_root / config_name
-    server_script = visual_root / "server.py"
-    demo_root = visual_root / "demo"
-    port = args.port
-    url = f"http://127.0.0.1:{port}/"
-    server = None
-    server_log = None
-    started_at = time.monotonic()
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    artifact_dir = visual_root / "artifacts" / f"{target}-{stamp}"
-    report_dir = visual_root / "reports" / f"{target}-{stamp}"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    # Never attach to an arbitrary process that already owns the requested port.
-    import socket
-    with socket.socket() as sock:
-        port_busy = sock.connect_ex(("127.0.0.1", port)) == 0
-    if port_busy:
-        add(r, "ai_visual_test", f"playwright-{target}", "UNVERIFIED",
-            f"端口 {port} 已被占用。为避免把其他服务误当成测试目标，本次没有连接或终止该进程；请指定其他 --port。")
-        return
-
-    if not config_path.is_file():
-        add(r, "ai_visual_test", f"playwright-{target}", "FAIL", f"缺少视觉测试配置：{config_path}")
-        return
-    try:
-        import importlib.util
-        if importlib.util.find_spec("pytest") is None:
-            add(r, "ai_visual_test", f"playwright-{target}", "UNVERIFIED", "当前 Python 环境未安装 pytest。请按 tests/ai_visual_test/requirements.txt 准备可选浏览器测试依赖。")
-            return
-        if importlib.util.find_spec("playwright") is None:
-            add(r, "ai_visual_test", f"playwright-{target}", "UNVERIFIED", "当前 Python 环境未安装 Playwright。请按 tests/ai_visual_test/requirements.txt 准备可选浏览器测试依赖。")
-            return
-    except Exception as exc:
-        add(r, "ai_visual_test", f"playwright-{target}", "UNVERIFIED", f"无法检查 Python 浏览器测试依赖：{exc}")
-        return
-
-    try:
-        if target == "demo":
-            command = [sys.executable, str(server_script), "--host", "127.0.0.1", "--root", str(demo_root), "--port", str(port)]
-        else:
-            node = shutil.which("node")
-            vite_runner = ROOT / "tests" / "frontend" / "run-vite.mjs"
-            if not node or not vite_runner.is_file():
-                add(r, "ai_visual_test", "playwright-app", "UNVERIFIED", "真实 MyBox 页面测试需要 Node.js 和 tests/frontend/run-vite.mjs；未启动服务器。")
-                return
-            # run-vite.mjs uses the locked local Vite CLI and its documented dependency recovery path.
-            command = [node, str(vite_runner), "--host", "127.0.0.1", "--port", str(port), "--strictPort"]
-
-        server_log = REPORT_DIR / f"visual-{target}-server-{stamp}.log"
-        log_handle = server_log.open("w", encoding="utf-8")
-        try:
-            server = subprocess.Popen(
-                command,
-                cwd=ROOT,
-                stdin=subprocess.DEVNULL,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-                start_new_session=(os.name != "nt"),
-            )
-        finally:
-            log_handle.close()
-
-        ready, readiness_detail = _http_ready(url, time.time() + max(1, args.timeout), server)
-        if not ready:
-            log_tail = server_log.read_text(encoding="utf-8", errors="replace")[-12000:] if server_log.exists() else ""
-            status = "FAIL" if server is not None and server.poll() is not None else "UNVERIFIED"
-            add(r, "ai_visual_test", f"playwright-{target}", status,
-                f"本地页面启动失败：{readiness_detail}。服务器日志：{server_log}", [log_tail[-9000:]])
-            return
-
-        env = os.environ.copy()
-        env["AI_VISUAL_BASE_URL"] = url
-        env["AI_VISUAL_CONFIG"] = str(config_path.resolve())
-        env["AI_VISUAL_ARTIFACT_DIR"] = str(artifact_dir.resolve())
-        env["AI_VISUAL_REPORT_DIR"] = str(report_dir.resolve())
-        # Use Python's current interpreter, not a possibly unrelated pytest executable on PATH.
-        remaining = max(1, int(args.timeout - (time.monotonic() - started_at)))
-        proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "-q", str(visual_root / "tests")],
-            cwd=ROOT,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=remaining,
-        )
-
-        # Create an overview image to make screenshot review easier; original screenshots remain authoritative.
-        contact_sheet = None
-        sheet_script = visual_root / "create_contact_sheet.py"
-        if sheet_script.is_file():
-            try:
-                sheet_result = subprocess.run(
-                    [sys.executable, str(sheet_script), "--artifacts-dir", str(artifact_dir)],
-                    cwd=ROOT,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    timeout=30,
-                )
-                if sheet_result.returncode == 0:
-                    candidate = artifact_dir / "contact-sheet.png"
-                    if candidate.is_file():
-                        contact_sheet = str(candidate)
-            except Exception:
-                pass
-
-        summary_path = report_dir / "visual-summary.json"
-        summary = {}
-        if summary_path.is_file():
-            try:
-                summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            except Exception:
-                summary = {}
-        if contact_sheet and summary:
-            summary["contact_sheet"] = contact_sheet
-            summary["ai_visual_review"] = "PENDING"
-            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-            review_path = report_dir / "AI_REVIEW.md"
-            if review_path.is_file():
-                review_text = review_path.read_text(encoding="utf-8")
-                if "Contact sheet" not in review_text:
-                    review_text = review_text.replace("## Screenshots captured", f"- Contact sheet: `{contact_sheet}`\n\n## Screenshots captured")
-                    review_path.write_text(review_text, encoding="utf-8")
-        output = [proc.stdout[-18000:]]
-        if server_log and server_log.exists():
-            output.append(f"server log: {server_log}")
-        if contact_sheet:
-            output.append(f"contact sheet: {contact_sheet}")
-        if summary_path.exists():
-            output.append(f"visual summary: {summary_path}")
-        counts = summary.get("counts", {})
-        if proc.returncode != 0:
-            result_status = "FAIL"
-        elif counts.get("PASSED", 0) == 0 and counts.get("UNVERIFIED", 0) > 0:
-            result_status = "UNVERIFIED"
-        else:
-            result_status = "PASS"
-        target_label = "MyBox 实际 Vite 页面" if target == "app" else "视觉工具 Demo"
-        add(r, "ai_visual_test", f"playwright-{target}", result_status,
-            f"{target_label} Playwright 测试退出码 {proc.returncode}；HTTP 就绪检查：{readiness_detail}；用例汇总：{counts}。截图和错误/几何报告路径已记录。AI 视觉复核仍须由执行者实际查看截图完成。",
-            output)
-    except subprocess.TimeoutExpired as exc:
-        captured = (exc.stdout or b"").decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        add(r, "ai_visual_test", f"playwright-{target}", "FAIL", f"视觉测试超过 {args.timeout} 秒超时。", [captured[-12000:], str(server_log or "")])
-    except Exception as exc:
-        add(r, "ai_visual_test", f"playwright-{target}", "FAIL", f"视觉测试未完成：{exc}", [str(server_log or "")])
-    finally:
-        _stop_visual_server(server)
-
 
 def run_project_tool(root, r, category, check_name, script_rel, extra_args=None, timeout=1800):
     script = root / script_rel
@@ -627,8 +371,6 @@ def run_opt_in(args, r, root):
                 add(r,'apk','assembleDebug',status,f'Gradle 退出码 {proc.returncode}；发现 {len(apk_paths)} 个 APK 输出文件。',ev)
             except subprocess.TimeoutExpired: add(r,'apk','assembleDebug','BLOCKED',f'Gradle 构建超过 {args.timeout} 秒超时。')
             except Exception as e: add(r,'apk','assembleDebug','FAIL',f'APK 构建未完成：{e}')
-    if args.visual: run_visual_tests(args, r, 'demo')
-    if args.visual_app: run_visual_tests(args, r, 'app')
 
 def main():
     parser=argparse.ArgumentParser(description='MyBox test suite; defaults to static checks only.')
@@ -646,10 +388,7 @@ def main():
     parser.add_argument('--install-node-deps',action='store_true',help='显式安装根目录 npm 依赖（需要 package-lock.json/npm-shrinkwrap.json）')
     parser.add_argument('--frontend-build',action='store_true',help='显式运行 npm run build')
     parser.add_argument('--apk-build',action='store_true',help='显式运行 Gradle assembleDebug；不会安装 APK 或连接设备')
-    parser.add_argument('--visual',action='store_true',help='启动测试工具 Demo 并运行 Playwright 自检')
-    parser.add_argument('--visual-app',action='store_true',help='启动真实 MyBox Vite 页面并运行 Playwright 视觉检查；依赖缺失时只从已校验的本地归档恢复，不会自动联网下载')
-    parser.add_argument('--port',type=int,default=4173,help='视觉 Demo 服务端口')
-    parser.add_argument('--timeout',type=int,default=900,help='显式安装/构建/视觉运行的超时秒数')
+    parser.add_argument('--timeout',type=int,default=900,help='显式安装/构建操作的超时秒数')
     args=parser.parse_args(); root=Path(args.root).expanduser().resolve()
     if not root.is_dir(): print(f'项目目录不存在：{root}',file=sys.stderr); return 2
     r=Result(); files=list(project_files(root))
@@ -662,9 +401,8 @@ def main():
         # Scan android structures as this also records assets directory integrity.
         scan_integration(root,files,r)
     if not args.only or args.only=='regression': scan_regression(root,files,r)
-    if not args.only or args.only=='ai_visual': scan_ai_visual(root,files,r)
     if not args.only or args.only=='build_toolchain': scan_build_toolchain(root,files,r)
-    if args.install_node_deps or args.frontend_build or args.apk_build or args.visual or args.visual_app or args.build_doctor or args.frontend_bundle_prepare or args.android_assets_sync or args.verify_android_assets or args.verify_apk_assets or args.android_build_pipeline: run_opt_in(args,r,root)
+    if args.install_node_deps or args.frontend_build or args.apk_build or args.build_doctor or args.frontend_bundle_prepare or args.android_assets_sync or args.verify_android_assets or args.verify_apk_assets or args.android_build_pipeline: run_opt_in(args,r,root)
     REPORT_DIR.mkdir(parents=True,exist_ok=True)
     counts={s:sum(1 for x in r.items if x['status']==s) for s in ('PASS','WARN','FAIL','BLOCKED','UNVERIFIED')}
     report={'project_root':str(root),'generated_at_utc':datetime.now(timezone.utc).isoformat(),'mode':'static plus explicitly selected operations','counts':counts,'results':r.items}

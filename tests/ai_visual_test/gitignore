@@ -1,7 +1,0 @@
-config.json
-artifacts/*
-reports/*
-baselines/*.png
-!artifacts/.gitkeep
-!reports/.gitkeep
-!baselines/.gitkeep

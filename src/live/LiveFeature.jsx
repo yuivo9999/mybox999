@@ -1,5 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react';
-import { ChevronLeft, Heart, Play, Radio } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  Film,
+  Globe,
+  Heart,
+  Menu,
+  MoreVertical,
+  Play,
+  Radio,
+  Settings2,
+  Signal,
+  Star,
+  Tv,
+  Trophy,
+  X,
+} from 'lucide-react';
 import { liveService } from './liveServices.js';
 import { playbackService } from '../core__services__playbackService.js';
 import { requestManager } from '../core__services__network__requestManager.js';
@@ -95,13 +112,36 @@ export async function resolveLiveChannelStreams(channel, { sources = [], signal,
 export const globalLiveCache = {
   tv1Channels: [],
   selectedChannelId: '',
-  selectedCategory: '全部',
+  selectedCategory: '央视',
   resolvedStreams: {},
   activeStreamIndex: 0,
   decoderEngine: null,
   isImmersive: false,
   exitImmersive: null,
 };
+
+function getLiveCategoryIcon(category) {
+  const label = String(category || '');
+  if (/央视|中央|CCTV/i.test(label)) return Tv;
+  if (/卫视|卫星/.test(label)) return Star;
+  if (/地方|本地|城市|省台/.test(label)) return Globe;
+  if (/电影|影视|剧场/.test(label)) return Film;
+  if (/体育|赛事|运动/.test(label)) return Trophy;
+  return CircleDot;
+}
+
+function LiveChannelBrand({ channel }) {
+  const match = String(channel?.name || '').match(/CCTV\s*[-—_]?\s*(\d{1,2})/i);
+  if (!match) {
+    return <SmartImage src={channel?.logo} alt={channel?.name || '频道标志'} fallback={<Radio size={20} />} />;
+  }
+  return (
+    <div className="live-channel-brand-mark" aria-label={`${match[0]} 频道标志`}>
+      <div className="live-channel-brand-word"><span>CC</span><i>TV</i><b>{match[1]}</b></div>
+      <small>中央电视台</small>
+    </div>
+  );
+}
 
 export function LiveFeature({ channels = [], sources = [], favorites = [], onChannel, onPlay, onTab, toggleFavorite }) {
   const page = usePageState();
@@ -110,7 +150,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const videoRef = useRef(null);
   const playerWindowBodyRef = useRef(null);
   const [selectedChannelId, setSelectedChannelId] = useState(globalLiveCache.selectedChannelId);
-  const [selectedCategory, setSelectedCategory] = useState(globalLiveCache.selectedCategory || '全部');
+  const [selectedCategory, setSelectedCategory] = useState(globalLiveCache.selectedCategory || '央视');
   const [activeStreamIndex, setActiveStreamIndex] = useState(globalLiveCache.activeStreamIndex || 0);
   const [tv1Channels, setTv1Channels] = useState(globalLiveCache.tv1Channels || []);
   const [tv1Loading, setTv1Loading] = useState(false);
@@ -192,6 +232,15 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const [customUrl, setCustomUrl] = useState('');
   const customUrlInputRef = useRef(null);
   const [customCandidate, setCustomCandidate] = useState(null);
+  const [showCustomUrl, setShowCustomUrl] = useState(false);
+  const [showLiveMenu, setShowLiveMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showCustomUrl) return undefined;
+    const timer = window.setTimeout(() => customUrlInputRef.current?.focus(), 40);
+    return () => window.clearTimeout(timer);
+  }, [showCustomUrl]);
 
   const handleLoadCustomUrl = () => {
     let raw = String(customUrl || '').trim();
@@ -656,12 +705,23 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const categoriesList = useMemo(() => {
     const cats = new Set();
     allChannels.forEach(c => { if (c.category) cats.add(c.category); });
-    return ['全部', ...Array.from(cats)];
+    const preferredOrder = ['央视', '卫视', '地方', '电影', '体育'];
+    const preferred = preferredOrder.filter(category => cats.has(category));
+    const remaining = Array.from(cats).filter(category => !preferred.includes(category));
+    return [...preferred, ...remaining, '全部'];
   }, [allChannels]);
 
   const filteredChannels = useMemo(() => {
     if (selectedCategory === '全部') return allChannels;
     return allChannels.filter(c => (c.category || '未分类') === selectedCategory);
+  }, [allChannels, selectedCategory]);
+
+  useEffect(() => {
+    if (!allChannels.length || selectedCategory === '全部') return;
+    if (allChannels.some(channel => (channel.category || '未分类') === selectedCategory)) return;
+    const fallbackCategory = allChannels.some(channel => channel.category === '央视') ? '央视' : '全部';
+    setSelectedCategory(fallbackCategory);
+    globalLiveCache.selectedCategory = fallbackCategory;
   }, [allChannels, selectedCategory]);
 
   const handleSwitchStream = (index, { preserveNotice = false } = {}) => {
@@ -744,49 +804,83 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   };
 
   return (
-    <Page>
-      <Header title="直播">
-        <div className="live-custom-source-tools" style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '6px', height: '32px', maxWidth: '300px' }}>
-          <input
-            type="text"
-            placeholder="输入自定义直播地址 (http/rtmp/m3u8)..."
-            ref={customUrlInputRef}
-            value={customUrl}
-            onChange={e => setCustomUrl(e.target.value)}
-            style={{
-              flex: 1,
-              height: '100%',
-              border: '1px solid #303643',
-              background: '#11141b',
-              borderRadius: '8px',
-              padding: '0 10px',
-              color: '#fff',
-              fontSize: '12px',
-              outline: 'none',
-            }}
-          />
+    <Page className="live-home-page">
+      <header className="live-home-topbar">
+        <div className="live-home-topbar-inner">
           <button
             type="button"
-            onClick={handleLoadCustomUrl}
-            style={{
-              height: '100%',
-              padding: '0 12px',
-              borderRadius: '8px',
-              background: '#f2f4f8',
-              color: '#101217',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              display: 'grid',
-              placeItems: 'center',
-              whiteSpace: 'nowrap',
-            }}
+            className="live-home-icon-button"
+            aria-label="打开主导航菜单"
+            aria-expanded={showLiveMenu}
+            onClick={() => { setShowLiveMenu(value => !value); setShowMoreMenu(false); }}
           >
-            加载
+            <Menu size={22} />
           </button>
+
+          <div className="live-home-section-pill" aria-label="当前页面：直播">
+            <span className="live-home-live-dot" />
+            <span>直播</span>
+          </div>
+
+          <div className="live-home-current-title">
+            <Tv size={21} aria-hidden="true" />
+            <div className="live-home-current-copy">
+              <strong>{activeChannel?.name || '电视直播'}</strong>
+              <small>{activeChannel ? `${activeChannel.category || '直播频道'} · ${playbackStatus === 'playing' ? '正在播放' : playbackStatus === 'loading' ? '正在连接' : '已选频道'}` : '选择频道开始观看'}</small>
+            </div>
+          </div>
+
+          <div className="live-home-network-chip" aria-label={typeof navigator !== 'undefined' && navigator.onLine === false ? '网络离线' : '网络状态正常'}>
+            <Signal size={15} />
+            <span>{typeof navigator !== 'undefined' && navigator.onLine === false ? '离线' : '在线'}</span>
+          </div>
+
+          <button
+            type="button"
+            className="live-home-icon-button live-home-more-button"
+            aria-label="打开直播快捷操作"
+            aria-expanded={showMoreMenu}
+            onClick={() => { setShowMoreMenu(value => !value); setShowLiveMenu(false); }}
+          >
+            <MoreVertical size={22} />
+          </button>
+
+          {showLiveMenu && (
+            <div className="live-home-popover live-home-nav-popover" role="menu" aria-label="主导航">
+              <button type="button" role="menuitem" onClick={() => { setShowLiveMenu(false); onTab?.('home'); }}><Tv size={17} /><span>首页</span></button>
+              <button type="button" role="menuitem" onClick={() => { setShowLiveMenu(false); onTab?.('favorites'); }}><Heart size={17} /><span>收藏</span></button>
+              <button type="button" role="menuitem" onClick={() => { setShowLiveMenu(false); onTab?.('me'); }}><Settings2 size={17} /><span>我的与源管理</span></button>
+            </div>
+          )}
+
+          {showMoreMenu && (
+            <div className="live-home-popover live-home-more-popover" role="menu" aria-label="直播快捷操作">
+              <button type="button" role="menuitem" onClick={() => { setShowMoreMenu(false); setShowCustomUrl(value => !value); }}><Tv size={17} /><span>输入自定义直播地址</span></button>
+              <button type="button" role="menuitem" onClick={() => { setShowMoreMenu(false); onTab?.('me'); }}><Settings2 size={17} /><span>管理直播源</span></button>
+              <button type="button" role="menuitem" onClick={() => { setShowMoreMenu(false); document.getElementById('live-channel-board')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><ChevronRight size={17} /><span>跳转频道列表</span></button>
+            </div>
+          )}
         </div>
-      </Header>
+      </header>
 
-
+      {showCustomUrl && (
+        <form className="live-home-custom-url" onSubmit={event => { event.preventDefault(); handleLoadCustomUrl(); if (customUrl.trim()) setShowCustomUrl(false); }}>
+          <div className="live-home-custom-url-copy">
+            <strong>自定义直播地址</strong>
+            <small>支持 HTTP / HTTPS / RTMP / RTSP</small>
+          </div>
+          <input
+            ref={customUrlInputRef}
+            value={customUrl}
+            onChange={event => setCustomUrl(event.target.value)}
+            placeholder="粘贴 m3u8、flv 或直播源地址"
+            aria-label="自定义直播地址"
+            inputMode="url"
+          />
+          <button type="submit" className="live-home-custom-load">加载</button>
+          <button type="button" className="live-home-custom-close" aria-label="关闭自定义地址输入" onClick={() => setShowCustomUrl(false)}><X size={17} /></button>
+        </form>
+      )}
 
       <SangtianPlayerWindow
         videoRef={videoRef}
@@ -885,15 +979,16 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
         </div>
       )}
 
+      <section className="live-channel-board" id="live-channel-board" aria-label="直播频道与选台">
       <div className="live-current-bar" aria-label="当前直播与沉浸播放入口">
         <div className="live-current-header">
           <div className="live-current-info">
-            <span className="live-pill">{activeChannel ? '● 正在直播' : '● 等待选择频道'}</span>
+            <span className="live-pill">{activeChannel ? '● 正在直播' : '● 信号待接入'}</span>
             <span className="live-channel-name">{activeChannel?.name || '尚未选择频道'}</span>
             <span className="live-channel-meta">
               {activeChannel
                 ? `${activeChannel.category || '未分类'} · ${activeStream?.label || (streamLoading ? '正在读取地址…' : '等待播放')}${currentEPG ? ` · 节目：${currentEPG.title || currentEPG.name}` : ''}`
-                : '请在下方频道列表选择频道；沉浸播放入口会一直保留在这里。'}
+                : '从频道列表选择一个频道，播放器与沉浸播放入口会保持在此页面。'}
             </span>
           </div>
 
@@ -947,10 +1042,14 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
         )}
       </div>
 
-      {hasEnabledLiveSource && (
+      {(hasEnabledLiveSource || allChannels.length > 0) && (
         <>
-          <div className="section-title">
-            <h3>频道分组选台</h3>
+          <div className="live-channel-board-heading">
+            <div>
+              <span className="live-channel-board-kicker">CHANNEL GUIDE</span>
+              <h3>频道列表</h3>
+            </div>
+            <span className="live-channel-board-count">{allChannels.length} 个频道</span>
             {tv1Loading && <small>正在读取：{tv1LoadedCount}</small>}
           </div>
 
@@ -977,8 +1076,9 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
                         pageStateStore.patch('live', { category: cat });
                       }}
                     >
+                      {(() => { const CategoryIcon = getLiveCategoryIcon(cat); return <CategoryIcon size={18} aria-hidden="true" />; })()}
                       <span>{cat}</span>
-                      <span className="count-badge">{count}</span>
+                      {cat === '全部' && <span className="count-badge">{count}</span>}
                     </button>
                   );
                 })}
@@ -994,7 +1094,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
                 const favorite = favorites.some(i => i.targetType === 'channel' && i.targetId === channel.channelId);
                 const isLazy = Boolean(channel.deferredRef);
                 const isResolving = streamLoading && selectedChannelId === channel.channelId && isLazy;
-                const streamCount = resolvedStreams[channel.channelId]?.streams?.length ?? channel.streams?.length ?? channel.estimatedStreamCount ?? channel.deferredRef?.lineIndices?.length ?? 0;
+                const programLabel = channel.currentProgram || channel.program || channel.description || channel.category || '电视直播';
 
                 return (
                   <div
@@ -1002,16 +1102,16 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
                     className={`live-channel-card ${isCurrent ? 'is-playing' : ''}`}
                     onClick={() => selectChannel(channel)}
                   >
-                    <div className="card-logo">
-                      <SmartImage src={channel.logo} alt={channel.name} fallback={<Radio size={20} />} />
+                    <div className={`card-logo ${/^CCTV\s*[-—_]?\s*\d+/i.test(channel.name || '') ? 'has-live-brand-mark' : ''}`}>
+                      <LiveChannelBrand channel={channel} />
                     </div>
                     <div className="card-main">
                       <div className="card-title">
                         <b>{channel.name}</b>
-                        {isCurrent && <span className="live-pill">● 播放中</span>}
+                        {isCurrent && <span className="live-pill">直播中</span>}
                       </div>
                       <div className="card-sub">
-                        {isResolving ? '正在读取地址…' : isLazy ? 'TV1 按需读取' : channel.category} · {streamCount ? `${streamCount} 条线路` : '点击播放'}
+                        {isResolving ? '正在读取地址…' : programLabel}
                       </div>
                     </div>
                     <button
@@ -1033,6 +1133,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
                     >
                       <Play size={16} />
                     </button>
+                    <ChevronRight className="live-channel-arrow" size={18} aria-hidden="true" />
                   </div>
                 );
               })}
@@ -1042,6 +1143,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
           {!tv1Loading && !allChannels.length && <EmptyState text="暂无可用 Live 频道" />}
         </>
       )}
+      </section>
     </Page>
   );
 }
@@ -1215,7 +1317,7 @@ export function LiveChannelPanel({
     </Page>
   );
 }
-const Page = ({ children }) => <main className="page">{children}</main>;
+const Page = ({ children, className = '' }) => <main className={`page ${className}`.trim()}>{children}</main>;
 const Header = ({ title, children }) => (
   <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '22px', gap: '12px' }}>
     <div style={{ flex: 1, minWidth: 0 }}>
