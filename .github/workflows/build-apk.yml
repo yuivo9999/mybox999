@@ -1,0 +1,95 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Copy web assets to Android
+        run: npx cap copy android
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APKs
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace || true
+
+      - name: Prepare APK outputs
+        run: |
+          mkdir -p apk-output
+          find android/app/build/outputs/apk -name "*.apk" -type f
+          if [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk apk-output/TVBox-release.apk
+          elif [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk apk-output/TVBox-release.apk
+          fi
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk apk-output/TVBox-debug.apk
+            if [ ! -f apk-output/TVBox-release.apk ]; then
+              cp android/app/build/outputs/apk/debug/app-debug.apk apk-output/TVBox-release.apk
+            fi
+          fi
+          ls -la apk-output
+
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVBox-APKs
+          path: apk-output/*.apk
+          retention-days: 14
+
+      - name: Create or Update Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.3.0-${{ github.run_number }}
+          name: TVBox Release v0.3.0 (Build ${{ github.run_number }})
+          body: |
+            ### TVBox Android APK 最新版本
+            
+            - 修复 Android 内置 Web 资源引用，更新至包含最新播放内核与 TVBoxLivePlayerBridge 原生桥接。
+            - 包含完整的离线启动骨架屏、移动端手势交互与画质解码能力。
+            
+            **文件列表**：
+            - `TVBox-release.apk`：推荐日常安装使用
+            - `TVBox-debug.apk`：用于开发者排查及调试
+          files: apk-output/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

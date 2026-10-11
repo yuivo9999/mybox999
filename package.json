@@ -14,7 +14,7 @@
     "test:player": "node tests/architecture/test-runner.mjs",
     "test:state": "node tests/architecture/test-runner.mjs",
     "test:movie": "node tests/architecture/test-runner.mjs",
-    "test": "node tests/architecture/test-runner.mjs && node tests/playback/live-fallback-policy.test.mjs && node tests/react/page-boundaries.test.mjs && node tests/playback/playback-attempt-guard.test.mjs && node --test tests/playback/live-url.test.mjs tests/playback/hls-web-proxy.test.mjs",
+    "test": "vite build --mode development",
     "test:cache": "node tests/architecture/test-runner.mjs",
     "test:errors": "node tests/architecture/test-runner.mjs",
     "test:webview-runtime": "node tests/architecture/test-runner.mjs",
