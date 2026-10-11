@@ -124,7 +124,8 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     const settings = persistentStateStore.getSnapshot()?.settings;
     const saved = settings?.playback?.livePlaybackScheme;
     const candidate = globalLiveCache.decoderEngine || saved;
-    return ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(candidate) ? candidate : 'html5_auto';
+    const allowedAndroidSchemes = ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software', 'html5_auto', 'hls_lowlatency', 'html5_hardware'];
+    return allowedAndroidSchemes.includes(candidate) ? candidate : 'ijk_hardware';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -383,6 +384,10 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   const [playbackError, setPlaybackError] = useState('');
   const [webAutoSwitchNotice, setWebAutoSwitchNotice] = useState('');
   const [resolvedPlaybackInput, setResolvedPlaybackInput] = useState(null);
+  const activePlaybackAddress = String(
+    resolvedPlaybackInput?.url || playbackCandidate?.mediaUrl || playbackCandidate?.url
+    || activeStream?.mediaUrl || activeStream?.url || customCandidate?.mediaUrl || customCandidate?.url || ''
+  ).trim();
   const playbackStatusRef = useRef(playbackStatus);
   playbackStatusRef.current = playbackStatus;
   const autoSkippedIndicesRef = useRef(new Set());
@@ -712,13 +717,28 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   };
 
 
-  const handleStartImmersivePlay = async (channelToPlay = activeChannel, streamId = activeStream?.streamId) => {
+  const handleStartImmersivePlay = async (channelToPlay = activeChannel, streamId) => {
     if (!channelToPlay) return;
+
+    // 未显式指定线路时，只沿用“当前频道”的当前线路；点击其他频道的沉浸播放则默认第一条线路。
+    const requestedStreamId = streamId ?? (
+      channelToPlay.channelId === activeChannel?.channelId ? activeStream?.streamId : undefined
+    );
     let targetIdx = 0;
-    if (streamId && Array.isArray(channelToPlay.streams)) {
-      const idx = channelToPlay.streams.findIndex(s => s.streamId === streamId || s.url === streamId);
+    if (requestedStreamId && Array.isArray(channelToPlay.streams)) {
+      const idx = channelToPlay.streams.findIndex(s => s.streamId === requestedStreamId || s.url === requestedStreamId);
       if (idx >= 0) targetIdx = idx;
     }
+
+    if (channelToPlay.channelId === activeChannel?.channelId) {
+      // 进入沉浸界面只是切换展示层。相同频道、相同线路正在播放时，不要调用
+      // selectChannel：它会清空播放候选/解析结果，可能导致当前直播重新加载。
+      if (targetIdx !== activeStreamIndex) handleSwitchStream(targetIdx);
+      setIsImmersive(true);
+      return;
+    }
+
+    // 只有真正切换到其他频道时，才更新选台状态并启动对应线路。
     selectChannel(channelToPlay, targetIdx);
     setIsImmersive(true);
   };
@@ -865,58 +885,67 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
         </div>
       )}
 
-      {activeChannel && (
-        <div className="live-current-bar">
-          <div className="live-current-header">
-            <div className="live-current-info">
-              <span className="live-pill">● 正在直播</span>
-              <span className="live-channel-name">{activeChannel.name}</span>
-              <span className="live-channel-meta">
-                {activeChannel.category} · {activeStream?.label || (streamLoading ? '正在读取地址…' : '等待播放')}
-                {currentEPG ? ` · 节目：${currentEPG.title || currentEPG.name}` : ''}
-              </span>
-            </div>
+      <div className="live-current-bar" aria-label="当前直播与沉浸播放入口">
+        <div className="live-current-header">
+          <div className="live-current-info">
+            <span className="live-pill">{activeChannel ? '● 正在直播' : '● 等待选择频道'}</span>
+            <span className="live-channel-name">{activeChannel?.name || '尚未选择频道'}</span>
+            <span className="live-channel-meta">
+              {activeChannel
+                ? `${activeChannel.category || '未分类'} · ${activeStream?.label || (streamLoading ? '正在读取地址…' : '等待播放')}${currentEPG ? ` · 节目：${currentEPG.title || currentEPG.name}` : ''}`
+                : '请在下方频道列表选择频道；沉浸播放入口会一直保留在这里。'}
+            </span>
+          </div>
 
-            <div className="live-current-actions">
+          <div className="live-current-actions">
+            {activeChannel && (
               <button
                 type="button"
                 className="secondary icon-button live-fav-btn"
                 onClick={() => toggleFavorite('channel', activeChannel.channelId)}
                 title="收藏频道"
+                aria-label="收藏频道"
               >
                 <Heart size={16} fill={favorites.some(i => i.targetType === 'channel' && i.targetId === activeChannel.channelId) ? 'currentColor' : 'none'} />
               </button>
-              <button
-                type="button"
-                className="primary live-play-btn"
-                onClick={() => handleStartImmersivePlay(activeChannel, activeStream?.streamId)}
-                disabled={!activeChannel}
-              >
-                <Play size={14} />
-                <span>沉浸播放</span>
-              </button>
+            )}
+            <button
+              type="button"
+              className="primary live-play-btn"
+              onClick={() => handleStartImmersivePlay(activeChannel, activeStream?.streamId)}
+              disabled={!activeChannel}
+              aria-label="沉浸播放"
+            >
+              <Play size={14} />
+              <span>沉浸播放</span>
+            </button>
+          </div>
+        </div>
+
+        {activeChannel?.streams?.length > 1 && (
+          <div className="live-stream-switcher">
+            <span className="switcher-label">线路 ({activeChannel.streams.length}):</span>
+            <div className="switcher-pills">
+              {activeChannel.streams.map((stream, index) => (
+                <button
+                  key={stream.streamId || index}
+                  type="button"
+                  className={`switcher-pill ${activeStreamIndex === index ? 'active' : ''}`}
+                  onClick={() => handleSwitchStream(index)}
+                >
+                  {stream.label || '线路 ' + (index + 1)}
+                </button>
+              ))}
             </div>
           </div>
-
-          {activeChannel.streams?.length > 1 && (
-            <div className="live-stream-switcher">
-              <span className="switcher-label">线路 ({activeChannel.streams.length}):</span>
-              <div className="switcher-pills">
-                {activeChannel.streams.map((stream, index) => (
-                  <button
-                    key={stream.streamId || index}
-                    type="button"
-                    className={`switcher-pill ${activeStreamIndex === index ? 'active' : ''}`}
-                    onClick={() => handleSwitchStream(index)}
-                  >
-                    {stream.label || '线路 ' + (index + 1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+        {activeChannel && (
+          <div className="live-stream-address" aria-label="当前频道播放地址">
+            <span className="live-stream-address-label">播放地址</span>
+            <code>{activePlaybackAddress || (streamLoading ? '正在读取播放地址…' : '暂无可用播放地址')}</code>
+          </div>
+        )}
+      </div>
 
       {hasEnabledLiveSource && (
         <>
