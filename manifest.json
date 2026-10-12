@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "id": "com.yuivo9999.mybox123",
+    "name": "MyBox",
+    "manifestVersion": 1,
+    "entryPage": "home"
+  },
+  "pageCatalog": [
+    {
+      "id": "home",
+      "name": "首页",
+      "tab": "home",
+      "route": null
+    },
+    {
+      "id": "movies",
+      "name": "影视",
+      "tab": "movies",
+      "route": null
+    },
+    {
+      "id": "movie-detail",
+      "name": "影视详情",
+      "tab": "movies",
+      "route": "detail"
+    },
+    {
+      "id": "movie-search",
+      "name": "影视搜索",
+      "tab": "movies",
+      "route": "search"
+    },
+    {
+      "id": "movie-playback",
+      "name": "影视播放",
+      "tab": "movies",
+      "route": "movie-play"
+    },
+    {
+      "id": "live",
+      "name": "Live 直播主界面",
+      "tab": "live",
+      "route": null
+    },
+    {
+      "id": "live-channel",
+      "name": "直播选台详情",
+      "tab": "live",
+      "route": "live-channel"
+    },
+    {
+      "id": "live-playback",
+      "name": "直播播放页",
+      "tab": "live",
+      "route": "live-play"
+    },
+    {
+      "id": "favorites",
+      "name": "收藏",
+      "tab": "favorites",
+      "route": null
+    },
+    {
+      "id": "me",
+      "name": "我的",
+      "tab": "me",
+      "route": null
+    },
+    {
+      "id": "settings",
+      "name": "设置与管理",
+      "tab": "me",
+      "route": "settings"
+    }
+  ],
+  "runtimeState": {
+    "javascriptApi": "window.MyBoxUIState",
+    "changeEvent": "mybox:ui-state-change",
+    "localStorageKey": "mybox.ui-state.v1",
+    "pollingRecommended": false,
+    "android": {
+      "transport": "ContentProvider",
+      "authority": "com.yuivo9999.mybox123.ui-state",
+      "contentUri": "content://com.yuivo9999.mybox123.ui-state/state",
+      "readPermission": "com.yuivo9999.mybox123.permission.READ_UI_STATE",
+      "readOnly": true,
+      "changeNotifications": true,
+      "columns": [
+        "_id",
+        "json"
+      ]
+    },
+    "fields": {
+      "currentPage": "Stable page id from pageCatalog",
+      "pageName": "Human-readable current page name",
+      "tab": "Current top-level tab",
+      "route": "Current internal route; empty string means no sub-route",
+      "displayMode": "embedded | immersive | fullscreen",
+      "fullscreen": "Whether the player is in full-screen mode",
+      "immersive": "Whether the Live immersive page is active",
+      "playerKind": "html5 | none",
+      "playerState": "idle | paused | playing | buffering | seeking | ended | error | unknown",
+      "selectedTitle": "Selected content/channel title only; media URLs are never included",
+      "currentChannel": "Current Live channel label when available",
+      "menuOpen": "Whether the player menu is open",
+      "overlayOpen": "Whether a dialog, drawer or player overlay is open",
+      "activePanel": "Best-effort identifier of the currently open panel",
+      "controlsVisible": "Whether player navigation controls are visible",
+      "documentVisibility": "Browser document visibilityState",
+      "appLifecycle": "Android host Activity lifecycle state",
+      "viewportWidth": "WebView viewport width in CSS pixels",
+      "viewportHeight": "WebView viewport height in CSS pixels",
+      "updatedAt": "ISO-8601 timestamp of the last reported change"
+    }
+  }
+}
