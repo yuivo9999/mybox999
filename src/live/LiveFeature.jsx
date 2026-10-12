@@ -37,6 +37,33 @@ import {
   VIEW_TIER
 } from '../core__playback__playbackStrategyDispatcher.js';
 
+function parseLiveEPGTimestamp(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return Number.NaN;
+
+  const parsed = Date.parse(raw);
+  if (Number.isFinite(parsed)) return parsed;
+
+  // XMLTV uses YYYYMMDDHHmmss followed by an optional numeric timezone, e.g. 20261012093000 +0000.
+  const match = raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-])(\d{2})(\d{2}))?$/);
+  if (!match) return Number.NaN;
+
+  const [, year, month, day, hour, minute, second, zoneSign, zoneHour = '0', zoneMinute = '0'] = match;
+  const epoch = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+  const normalized = new Date(epoch);
+  if (
+    normalized.getUTCFullYear() !== Number(year)
+    || normalized.getUTCMonth() !== Number(month) - 1
+    || normalized.getUTCDate() !== Number(day)
+    || normalized.getUTCHours() !== Number(hour)
+    || normalized.getUTCMinutes() !== Number(minute)
+    || normalized.getUTCSeconds() !== Number(second)
+  ) return Number.NaN;
+
+  const offsetMinutes = (Number(zoneHour) * 60 + Number(zoneMinute)) * (zoneSign === '+' ? 1 : -1);
+  return epoch - offsetMinutes * 60_000;
+}
+
 function describePlaybackError(message) {
   const text = String(message || '');
   if (!text) return '';
@@ -165,7 +192,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     const settings = persistentStateStore.getSnapshot()?.settings;
     const saved = settings?.playback?.livePlaybackScheme;
     const candidate = globalLiveCache.decoderEngine || saved;
-    const allowedAndroidSchemes = ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software', 'html5_auto', 'hls_lowlatency', 'html5_hardware'];
+    const allowedAndroidSchemes = ['ijk_hardware'];
     return allowedAndroidSchemes.includes(candidate) ? candidate : 'ijk_hardware';
   });
 
@@ -177,9 +204,12 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
       // 竖屏沉浸页面不等于真正全屏；仅用户主动全屏后才使用沉浸播放路由。
       viewTier: isActualFullscreen ? VIEW_TIER.IMMERSIVE : VIEW_TIER.MAIN,
     });
-    const resolved = resolveEngineSelection(engineInput, currentRoute);
-    setDecoderEngine(engineInput);
-    globalLiveCache.decoderEngine = engineInput;
+    const selectedEngine = runtimeEnv === RUNTIME_ENV.ANDROID && currentRoute.kind === MEDIA_KIND.LIVE
+      ? 'ijk_hardware'
+      : engineInput;
+    const resolved = resolveEngineSelection(selectedEngine, currentRoute);
+    setDecoderEngine(selectedEngine);
+    globalLiveCache.decoderEngine = selectedEngine;
 
     // 1. 保存设置到持久化 settings 中
     const settings = persistentStateStore.getSnapshot()?.settings;
@@ -188,7 +218,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
       playback: {
         ...currentPlayback,
         livePlayer: resolved.engine,
-        livePlaybackScheme: engineInput,
+        livePlaybackScheme: selectedEngine,
         decoder: {
           ...(currentPlayback.decoder || {}),
           [resolved.engine]: resolved.decoder,
@@ -559,8 +589,12 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     liveService.getEPG(activeChannel).then(programs => {
       if (!active || !programs?.length) return;
       const now = Date.now();
-      const current = programs.find(p => p.startAt <= now && p.endAt >= now) || programs[0];
-      if (current) setCurrentEPG(current);
+      const current = programs.find(program => {
+        const start = parseLiveEPGTimestamp(program.startTime || program.startAt);
+        const end = parseLiveEPGTimestamp(program.endTime || program.endAt);
+        return Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end;
+      });
+      setCurrentEPG(current || null);
     }).catch(() => {});
 
     return () => { active = false; };
@@ -624,7 +658,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
   // Keyboard & TV Box Remote D-Pad Navigation (Up/Down Arrow Keys)
   useEffect(() => {
     const handleKeyDown = event => {
-      if (!allChannels.length) return;
+      if (!allChannels.length || document.querySelector('[aria-modal="true"]')) return;
       const tag = String(event.target?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target?.isContentEditable) return;
       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -706,7 +740,10 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
 
   const categoriesList = useMemo(() => {
     const cats = new Set();
-    allChannels.forEach(c => { if (c.category) cats.add(c.category); });
+    allChannels.forEach(c => {
+      const category = String(c.category || '').trim();
+      cats.add(category || '未分类');
+    });
     const preferredOrder = ['央视', '卫视', '地方', '电影', '体育'];
     const preferred = preferredOrder.filter(category => cats.has(category));
     const remaining = Array.from(cats).filter(category => !preferred.includes(category));
@@ -715,13 +752,13 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
 
   const filteredChannels = useMemo(() => {
     if (selectedCategory === '全部') return allChannels;
-    return allChannels.filter(c => (c.category || '未分类') === selectedCategory);
+    return allChannels.filter(channel => (String(channel.category || '').trim() || '未分类') === selectedCategory);
   }, [allChannels, selectedCategory]);
 
   useEffect(() => {
     if (!allChannels.length || selectedCategory === '全部') return;
-    if (allChannels.some(channel => (channel.category || '未分类') === selectedCategory)) return;
-    const fallbackCategory = allChannels.some(channel => channel.category === '央视') ? '央视' : '全部';
+    if (allChannels.some(channel => (String(channel.category || '').trim() || '未分类') === selectedCategory)) return;
+    const fallbackCategory = allChannels.some(channel => String(channel.category || '').trim() === '央视') ? '央视' : '全部';
     setSelectedCategory(fallbackCategory);
     globalLiveCache.selectedCategory = fallbackCategory;
   }, [allChannels, selectedCategory]);
@@ -910,6 +947,7 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
         terminalTag={activeChannel ? 'LIVE · ' + activeChannel.name : (customCandidate ? 'LIVE · 自定义地址' : 'LIVE · 等待频道')}
         channels={allChannels}
         activeChannel={activeChannel}
+        currentProgram={currentEPG?.title || currentEPG?.name || ''}
         activeStreamIndex={activeStreamIndex}
         onSelectChannel={selectChannel}
         onSwitchStreamIndex={handleSwitchStream}

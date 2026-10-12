@@ -26,9 +26,7 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
     if (isWeb) return ['hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
       ? playback.livePlaybackScheme
       : 'hls_lowlatency';
-    return ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
-      ? playback.livePlaybackScheme
-      : 'html5_auto';
+    return 'ijk_hardware';
   });
   const [isImmersive, setIsImmersive] = useState(false);
   const [resolvedInput, setResolvedInput] = useState(null);
@@ -94,7 +92,7 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
       const resolved = resolveEngineSelection(engineInput, route);
       engine = resolved.engine;
       decoderMode = resolved.decoder;
-      selectedScheme = ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(engineInput) ? engineInput : 'html5_auto';
+      selectedScheme = 'ijk_hardware';
       resolvedHint = resolved.playerHint;
     } else {
       const scheme = getPlaybackScheme(engineInput);
