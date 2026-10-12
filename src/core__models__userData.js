@@ -18,13 +18,13 @@ export function getPlaybackSchemeId(engine = 'html5', decoder = 'browser_auto') 
     if (normalizedDecoder === 'native_hardware' || normalizedDecoder === 'hardware') return 'html5_hardware';
     return 'html5_auto';
   }
-  // Retired native engine values are intentionally not valid playback engines.
+  // Legacy `ijk` and `exo` values are intentionally not valid playback engines.
   return 'html5_auto';
 }
 
 export function getPlaybackScheme(value = 'html5_auto') {
   const requested = String(value || '').trim().toLowerCase();
-  const normalizedLegacy = /^exo_(hardware|software)$/.test(requested)
+  const normalizedLegacy = /^(ijk|exo)_(hardware|software)$/.test(requested)
     ? 'html5_auto'
     : requested;
   return PLAYBACK_SCHEMES.find(scheme => scheme.id === normalizedLegacy)
@@ -82,11 +82,11 @@ export const normalizePlaybackSettings = (value = {}) => {
     const requested = String(schemeValue || '').trim().toLowerCase();
     const valid = PLAYBACK_SCHEMES.find(scheme => scheme.id === requested);
     if (valid) return valid;
-    if (/^exo_(hardware|software)$/.test(requested)) {
+    if (/^(ijk|exo)_(hardware|software)$/.test(requested)) {
       return getPlaybackScheme(scope === 'live' ? 'hls_lowlatency' : 'html5_auto');
     }
     const legacy = String(legacyPlayer || '').trim().toLowerCase();
-    if (legacy && legacy !== 'html5') {
+    if (legacy === 'ijk' || legacy === 'exo') {
       return getPlaybackScheme(scope === 'live' ? 'hls_lowlatency' : 'html5_auto');
     }
     if (!requested && !legacy) {

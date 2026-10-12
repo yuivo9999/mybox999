@@ -65,6 +65,7 @@ export function getRuntimeCapabilities() {
     // All playback uses the page-owned HTML media element. There is no
     // dedicated Android live player or native decoding bridge.
     supportsExoPlayer: false,
+    supportsIjkPlayer: false,
     supportsAndroidNativePlayer: false,
     supportsHlsJs: hasMediaSource,
     supportsHtml5Video: typeof window !== 'undefined',
@@ -273,7 +274,7 @@ export function resolveEngineSelection(selectedId, currentRoute) {
 
   if (isAndroid) {
     // Android Live and VOD both stay on the page-owned HTMLMediaElement.
-    // Legacy player selections fall back to HTML5 auto mode.
+    // Old IJK/Exo settings intentionally fall back to HTML5 auto mode.
     let mode = 'auto';
     if (selectedId === 'hls_worker') mode = 'hls_worker';
     else if (selectedId === 'hls_lowlatency') mode = 'hls_lowlatency';

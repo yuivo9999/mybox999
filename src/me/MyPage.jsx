@@ -219,7 +219,7 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
    <SettingMenu icon={Radio} title="默认直播播放方案" value={liveScheme.label} onClick={()=>applyScheme('live',nextScheme('live').id)}/>
    <SettingMenu icon={Radio} title="失败自动切换" value={playback.fallbackEnabled===false?'关闭':'开启'} onClick={()=>updatePlayback({fallbackEnabled:playback.fallbackEnabled===false})}/>
    {!isAndroidPlayback&&<SettingMenu icon={Radio} title="切换顺序" value={order} onClick={()=>updatePlayback({fallbackOrder:rotateOrder(playback.fallbackOrder)})}/>}
-   <InfoCard title="可选播放方案" text={'影视与 Live 统一使用页面内 HTML5 video；根据直播流格式依次尝试 HLS.js/MSE、浏览器原生媒体或 MPEG-TS，不依赖独立原生播放器或视频表面。'}/>
+   <InfoCard title="可选播放方案" text={'影视与 Live 统一使用页面内 HTML5 video；根据直播流格式依次尝试 HLS.js/MSE、浏览器原生媒体或 MPEG-TS。不会调用 IJKPlayer、ExoPlayer 或独立原生视频表面。'}/>
    <SectionTitle title="解码设置"/>
    <InfoCard title={isAndroidPlayback?'HTML5 播放范围':'浏览器播放方案'} text={'所有平台都由 HTML5 video 承载画面。可用解码器由 Android WebView/浏览器决定；格式兼容、跨域策略与媒体请求头限制可能影响个别线路。'}/>
    <SectionTitle title="线路设置"/>
