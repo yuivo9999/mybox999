@@ -61,18 +61,6 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 
-    // Unified native playback backends: Media3/ExoPlayer is primary, IJK and
-    // Android MediaPlayer are fallback engines behind the same JS bridge.
-    def media3Version = "1.11.1"
-    implementation "androidx.media3:media3-exoplayer:${media3Version}"
-    implementation "androidx.media3:media3-exoplayer-hls:${media3Version}"
-    implementation "androidx.media3:media3-exoplayer-dash:${media3Version}"
-    implementation "androidx.media3:media3-exoplayer-rtsp:${media3Version}"
-    implementation "androidx.media3:media3-datasource-okhttp:${media3Version}"
-
-    // IJK fork with a published full Android artifact. This avoids the retired
-    // Bintray/JCenter-only Bilibili coordinates while retaining the IJK API.
-    implementation "io.github.flutterplayer:fijkplayer-full:0.1.18"
 
     // Sandboxed JavaScript runtime for TVBox Drpy extensions. Network/file
     // capabilities are not exposed directly to scripts; they are provided by

@@ -10,7 +10,7 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private NativePlaybackBridge playbackBridge;
-    private AndroidLivePlayerBridge livePlayerBridge;
+    private MyBoxUiStateBridge uiStateBridge;
     private TVBoxExtensionBridge tvBoxExtensionBridge;
     private TVBoxJarBridge tvBoxJarBridge;
     private long lastBackPressTime = 0;
@@ -60,10 +60,10 @@ public class MainActivity extends BridgeActivity {
             }
 
             try {
-                livePlayerBridge = new AndroidLivePlayerBridge(this, webView);
-                webView.addJavascriptInterface(livePlayerBridge, AndroidLivePlayerBridge.JS_NAME);
+                uiStateBridge = new MyBoxUiStateBridge(getApplicationContext());
+                webView.addJavascriptInterface(uiStateBridge, MyBoxUiStateBridge.JS_NAME);
             } catch (Throwable t) {
-                android.util.Log.e("MainActivity", "Failed to attach AndroidLivePlayerBridge", t);
+                android.util.Log.e("MainActivity", "Failed to attach MyBoxUiStateBridge", t);
             }
 
             try {
@@ -84,11 +84,11 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
+        if (uiStateBridge != null) {
+            uiStateBridge.setHostLifecycle("background");
+        }
         if (playbackBridge != null) {
             playbackBridge.onHostPause();
-        }
-        if (livePlayerBridge != null) {
-            livePlayerBridge.onHostPause();
         }
         super.onPause();
     }
@@ -96,11 +96,11 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        if (uiStateBridge != null) {
+            uiStateBridge.setHostLifecycle("foreground");
+        }
         if (playbackBridge != null) {
             playbackBridge.onHostResume();
-        }
-        if (livePlayerBridge != null) {
-            livePlayerBridge.onHostResume();
         }
     }
 
@@ -133,15 +133,19 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
-        if (livePlayerBridge != null) {
-            livePlayerBridge.release();
-            livePlayerBridge = null;
+        if (uiStateBridge != null) {
+            uiStateBridge.setHostLifecycle("stopped");
         }
         if (playbackBridge != null) {
             playbackBridge.release();
             playbackBridge = null;
         }
         tvBoxExtensionBridge = null;
+        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        if (webView != null) {
+            try { webView.removeJavascriptInterface(MyBoxUiStateBridge.JS_NAME); } catch (Throwable ignored) {}
+        }
+        uiStateBridge = null;
         if (tvBoxJarBridge != null) {
             tvBoxJarBridge.release();
             tvBoxJarBridge = null;

@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <permission
+        android:name="com.yuivo9999.mybox123.permission.READ_UI_STATE"
+        android:protectionLevel="normal" />
+    <permission
+        android:name="com.yuivo9999.mybox123.permission.WRITE_UI_STATE"
+        android:protectionLevel="signature" />
+
     <application
         android:usesCleartextTraffic="true"
         android:extractNativeLibs="true"
@@ -30,6 +37,13 @@
             android:name=".TVBoxJarExecutionService"
             android:exported="false"
             android:isolatedProcess="true" />
+
+        <provider
+            android:name=".MyBoxUiStateProvider"
+            android:authorities="com.yuivo9999.mybox123.ui-state"
+            android:exported="true"
+            android:readPermission="com.yuivo9999.mybox123.permission.READ_UI_STATE"
+            android:writePermission="com.yuivo9999.mybox123.permission.WRITE_UI_STATE" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

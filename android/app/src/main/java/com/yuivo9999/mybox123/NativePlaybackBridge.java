@@ -21,10 +21,10 @@ import org.json.JSONObject;
  *
  * Video playback is intentionally owned by the HTMLVideoElement rendered inside
  * the current WebView page. This class MUST NOT create a TextureView, Surface,
- * ExoPlayer, IJK player, or any other independent video output surface.
+ * any independent video output surface.
  *
  * The bridge retains SharedPreferences storage, provides native Activity
- * fullscreen/orientation control, and rejects retired native playback methods.
+ * fullscreen/orientation control, and rejects legacy native playback methods.
  */
 public final class NativePlaybackBridge {
     public static final String JS_NAME = "TVBoxAndroidBridge";

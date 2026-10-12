@@ -385,28 +385,6 @@ function normalizeTVBoxParseConfig(parsed = {}) {
   return { parses, flags, rules, ads, doh };
 }
 
-function normalizeTVBoxIJKProfiles(value) {
-  if (!Array.isArray(value)) return {};
-  const profiles = {};
-  value.forEach((profile) => {
-    const group = String(profile?.group || '').trim();
-    if (!group) return;
-    const options = Array.isArray(profile?.options) ? profile.options.map((option) => ({
-      category: Number(option?.category),
-      name: String(option?.name || '').trim(),
-      value: option?.value == null ? '' : String(option.value),
-    })).filter(option =>
-      Number.isInteger(option.category)
-      && option.category >= 1
-      && option.category <= 4
-      && option.name
-      && option.value !== ''
-    ) : [];
-    if (options.length) profiles[group] = options;
-  });
-  return profiles;
-}
-
 function parseTVBoxSources(parsed, { bundleId = null } = {}) {
   const imported = [];
   const tvboxParseConfig = normalizeTVBoxParseConfig(parsed);
@@ -456,9 +434,6 @@ function parseTVBoxSources(parsed, { bundleId = null } = {}) {
         ...(Array.isArray(site.categories) ? { categories: site.categories } : (typeof site.categories === 'string' && site.categories.trim() ? { categories: site.categories.split(/[,，#|]/).map(value => value.trim()).filter(Boolean) } : {})),
         tvboxApi: api,
         tvboxDefinition: { ...site },
-        ...(Object.keys(normalizeTVBoxIJKProfiles(parsed.ijk)).length
-          ? { tvboxIJKProfiles: normalizeTVBoxIJKProfiles(parsed.ijk) }
-          : {}),
         ...(tvboxParseConfig.parses.length || tvboxParseConfig.flags.length || tvboxParseConfig.rules.length || tvboxParseConfig.ads.length || tvboxParseConfig.doh.length
           ? { tvboxParseConfig }
           : {}),
@@ -510,7 +485,6 @@ function parseTVBoxSources(parsed, { bundleId = null } = {}) {
           status: '未测试',
           sourceCapability: 'direct-live',
           adapterType: 'live-reference',
-          tvboxIJKProfiles: normalizeTVBoxIJKProfiles(parsed.ijk),
           tvboxParseConfig,
           createdAt: Date.now(),
         });

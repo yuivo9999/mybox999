@@ -187,16 +187,14 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
   const updatePlayback=(patch={})=>onUpdateSettings?.({
     playback:{...playback,...patch,decoder:{...(playback.decoder??{}),...(patch.decoder??{})}},
   });
-  const availableSchemes=(scope)=>isAndroidPlayback
-    ? PLAYBACK_SCHEMES.filter(item => scope === 'live'
-        ? ['ijk_hardware','ijk_software','exo_hardware','exo_software','html5_auto','hls_lowlatency','html5_hardware'].includes(item.id)
-        : ['html5_auto','hls_worker','html5_hardware'].includes(item.id))
-    : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android');
+  const availableSchemes=(scope)=>PLAYBACK_SCHEMES.filter(item => scope === 'live'
+    ? ['hls_lowlatency','html5_auto','html5_hardware','hls_worker'].includes(item.id)
+    : ['html5_auto','hls_worker','html5_hardware'].includes(item.id));
   const resolveScheme=(scope)=>{
     const saved=playback[scope+'PlaybackScheme'];
-    const legacy=getPlaybackSchemeId(playback[scope+'Player']||'ijk',playback.decoder?.[playback[scope+'Player']||'ijk']||'hardware');
+    const legacy=getPlaybackSchemeId(playback[scope+'Player']||'html5',playback.decoder?.[playback[scope+'Player']||'html5']||'browser_auto');
     const allowed=availableSchemes(scope);
-    const defaultAndroidScheme = scope === 'live' ? 'ijk_hardware' : 'html5_auto';
+    const defaultAndroidScheme = scope === 'live' ? 'hls_lowlatency' : 'html5_auto';
     const desired=isAndroidPlayback?(allowed.some(item=>item.id===saved)?saved:defaultAndroidScheme):(saved||legacy);
     return allowed.find(item=>item.id===desired)||allowed[0]||getPlaybackScheme('html5_auto');
   };
@@ -211,7 +209,7 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
     const index=schemes.findIndex(item=>item.id===current.id);
     return schemes[(index+1)%schemes.length];
   };
-  const order=isAndroidPlayback?'HTML5 原生媒体 → HLS.js/MSE → MPEG-TS/备用线路':(playback.fallbackOrder??['ijk','exo','native']).join(' → ');
+  const order='HLS.js/MSE → HTML5 原生媒体 → MPEG-TS/备用线路';
   const movieScheme=resolveScheme('movie');
   const liveScheme=resolveScheme('live');
   return <Page><Header title="设置"/>
@@ -221,13 +219,9 @@ function MyPage({tab,movies,channels,favorites,history,sources,searches,progress
    <SettingMenu icon={Radio} title="默认直播播放方案" value={liveScheme.label} onClick={()=>applyScheme('live',nextScheme('live').id)}/>
    <SettingMenu icon={Radio} title="失败自动切换" value={playback.fallbackEnabled===false?'关闭':'开启'} onClick={()=>updatePlayback({fallbackEnabled:playback.fallbackEnabled===false})}/>
    {!isAndroidPlayback&&<SettingMenu icon={Radio} title="切换顺序" value={order} onClick={()=>updatePlayback({fallbackOrder:rotateOrder(playback.fallbackOrder)})}/>}
-   <InfoCard title="可选播放方案" text={isAndroidPlayback
-     ? 'Android Live 可使用独立 IJKPlayer / ExoPlayer，并分别选择硬件或软件解码；HTML5 自动适配、HLS.js/MSE 与 HTML5 原生媒体仍可作为直播备选。影视点播继续使用页面内 HTML 视频播放路径。'
-     : PLAYBACK_SCHEMES.filter(item=>item.platform!=='android').map(item=>item.label).join(' · ') + '。普通手机浏览器使用 HLS.js 或 HTML5 原生媒体，不调用 Android 原生视频引擎。'}/>
+   <InfoCard title="可选播放方案" text={'影视与 Live 统一使用页面内 HTML5 video；根据直播流格式依次尝试 HLS.js/MSE、浏览器原生媒体或 MPEG-TS，不依赖独立原生播放器或视频表面。'}/>
    <SectionTitle title="解码设置"/>
-   <InfoCard title={isAndroidPlayback?'Live 与点播解码范围':'浏览器播放方案'} text={isAndroidPlayback
-     ? 'Android Live 播放器与解码方式请在直播主界面或沉浸播放界面的“直播配置”中选择；IJK/Exo 独立于通用原生播放器。影视点播仍走内嵌 HTML5/HLS 路径，不受 Live 专用播放器影响。'
-     : '普通手机浏览器使用其 HTML5 视频解码能力与 HLS.js/MSE 路径，实际能力取决于浏览器和源站的媒体格式、跨域与请求头策略。'}/>
+   <InfoCard title={isAndroidPlayback?'HTML5 播放范围':'浏览器播放方案'} text={'所有平台都由 HTML5 video 承载画面。可用解码器由 Android WebView/浏览器决定；格式兼容、跨域策略与媒体请求头限制可能影响个别线路。'}/>
    <SectionTitle title="线路设置"/>
    <SettingMenu icon={Radio} title="默认影视线路" value={sourceSettingLabel(sources,'movie',settings?.defaultMovieSource)} onClick={()=>onUpdateSettings?.({defaultMovieSource:nextSource(sources,'movie',settings?.defaultMovieSource)})}/>
    <SettingMenu icon={Radio} title="默认直播线路" value={sourceSettingLabel(sources,'live',settings?.defaultLiveSource)} onClick={()=>onUpdateSettings?.({defaultLiveSource:nextSource(sources,'live',settings?.defaultLiveSource)})}/>
@@ -482,7 +476,7 @@ const InfoCard=({title,text})=><div className="info-card"><Info size={18}/><div>
 const Empty=({text})=><div className="empty"><Film size={22}/><span>{text}</span></div>;
 const MovieGrid=React.memo(function MovieGrid({movies,onMovie}){return <div className="movie-grid">{movies.map(movie=><article className="movie-card" key={movie.contentId} onClick={()=>onMovie(movie)}><SmartImage src={movie.poster} alt={movie.title}/><div><b>{movie.title}</b><span>{movie.year} · {movie.category}</span></div></article>)}</div>});
 const cycle=(value,values)=>{const index=values.indexOf(value);return values[(index+1)%values.length]};
-const rotateOrder=(order=['ijk','exo','native'])=>{const normalized=['ijk','exo','native'].filter(item=>order?.includes(item));const safe=normalized.length===3?normalized:['ijk','exo','native'];return [...safe.slice(1),safe[0]]};
+const rotateOrder=(order=['hls','native','mpegts'])=>{const base=['hls','native','mpegts'];const normalized=base.filter(item=>order?.includes(item));const safe=normalized.length===3?normalized:base;return [...safe.slice(1),safe[0]]};
 const nextSource=(sources,type,current)=>{const list=sources.filter(source=>source.sourceType===type&&source.enabled!==false);if(!list.length)return null;const ids=[null,...list.map(source=>source.sourceId)];const index=Math.max(0,ids.indexOf(current));return ids[(index+1)%ids.length]??null};
 const sourceSettingLabel=(sources,type,id)=>sources.find(source=>source.sourceType===type&&source.sourceId===id)?.name||'自动选择';
 const Menu=({icon:Icon,title,onClick,badge})=><button className="menu" onClick={onClick}><Icon size={19}/><span>{title}</span>{badge>0&&<em>{badge}</em>}<ChevronLeft className="flip" size={17}/></button>;

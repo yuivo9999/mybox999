@@ -1,35 +1,35 @@
 import { DEFAULT_FONT_ID } from './me/preferences.js';
 
 export const PLAYBACK_SCHEMES = Object.freeze([
-  Object.freeze({ id: 'ijk_hardware', label: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', platform: 'android' }),
-  Object.freeze({ id: 'ijk_software', label: 'IJKPlayer 软解', engine: 'ijk', decoder: 'software', platform: 'android' }),
-  Object.freeze({ id: 'exo_hardware', label: 'ExoPlayer 硬解', engine: 'exo', decoder: 'hardware', platform: 'android' }),
-  Object.freeze({ id: 'exo_software', label: 'ExoPlayer 软解', engine: 'exo', decoder: 'software', platform: 'android' }),
-  Object.freeze({ id: 'html5_auto', label: 'HTML5 自动适配（内嵌播放器）', engine: 'html5', decoder: 'browser_auto', mode: 'auto', platform: 'android' }),
-  Object.freeze({ id: 'hls_lowlatency', label: 'HLS.js 低延时内核', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', platform: 'both' }),
+  Object.freeze({ id: 'html5_auto', label: 'HTML5 自动适配', engine: 'html5', decoder: 'browser_auto', mode: 'auto', platform: 'both' }),
+  Object.freeze({ id: 'hls_lowlatency', label: 'HTML5 + HLS.js 低延迟直播', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', platform: 'both' }),
   Object.freeze({ id: 'html5_hardware', label: 'HTML5 原生媒体优先', engine: 'html5', decoder: 'browser_auto', mode: 'native_hardware', platform: 'both' }),
-  Object.freeze({ id: 'hls_worker', label: 'HLS.js Worker分片', engine: 'html5', decoder: 'browser_auto', mode: 'hls_worker', platform: 'both' }),
+  Object.freeze({ id: 'hls_worker', label: 'HLS.js / MSE 播放', engine: 'html5', decoder: 'browser_auto', mode: 'hls_worker', platform: 'both' }),
 ]);
 
-export function getPlaybackSchemeId(engine = 'ijk', decoder = 'hardware') {
-  const normalizedEngine = String(engine || 'ijk').trim().toLowerCase();
-  const normalizedDecoder = String(decoder || 'hardware').trim().toLowerCase();
+export const PLAYBACK_FALLBACK_ORDER = Object.freeze(['hls', 'native', 'mpegts']);
+
+export function getPlaybackSchemeId(engine = 'html5', decoder = 'browser_auto') {
+  const normalizedEngine = String(engine || 'html5').trim().toLowerCase();
+  const normalizedDecoder = String(decoder || 'browser_auto').trim().toLowerCase();
   if (normalizedEngine === 'html5') {
     if (normalizedDecoder === 'hls_lowlatency') return 'hls_lowlatency';
     if (normalizedDecoder === 'hls_worker') return 'hls_worker';
-    if (normalizedDecoder === 'browser_auto' || normalizedDecoder === 'auto') return 'html5_auto';
-    return 'html5_hardware';
+    if (normalizedDecoder === 'native_hardware' || normalizedDecoder === 'hardware') return 'html5_hardware';
+    return 'html5_auto';
   }
-  return PLAYBACK_SCHEMES.find(
-    scheme => scheme.engine === normalizedEngine && scheme.decoder === normalizedDecoder,
-  )?.id || 'ijk_hardware';
+  // Retired native engine values are intentionally not valid playback engines.
+  return 'html5_auto';
 }
 
-export function getPlaybackScheme(value = 'ijk_hardware') {
-  return PLAYBACK_SCHEMES.find(scheme => scheme.id === String(value || '').trim())
+export function getPlaybackScheme(value = 'html5_auto') {
+  const requested = String(value || '').trim().toLowerCase();
+  const normalizedLegacy = /^exo_(hardware|software)$/.test(requested)
+    ? 'html5_auto'
+    : requested;
+  return PLAYBACK_SCHEMES.find(scheme => scheme.id === normalizedLegacy)
     || PLAYBACK_SCHEMES[0];
 }
-
 
 export function createFavoriteId(targetType, targetId) {
   return `favorite:${targetType}:${targetId}`;
@@ -48,13 +48,13 @@ export function createSearchId(keyword) {
 }
 
 export const defaultPlaybackSettings = () => ({
-  moviePlayer: 'ijk',
-  livePlayer: 'ijk',
-  moviePlaybackScheme: 'ijk_hardware',
-  livePlaybackScheme: 'ijk_hardware',
+  moviePlayer: 'html5',
+  livePlayer: 'html5',
+  moviePlaybackScheme: 'html5_auto',
+  livePlaybackScheme: 'hls_lowlatency',
   fallbackEnabled: true,
-  fallbackOrder: ['ijk', 'exo', 'native'],
-  decoder: { exo: 'hardware', ijk: 'hardware', native: 'system' },
+  fallbackOrder: [...PLAYBACK_FALLBACK_ORDER],
+  decoder: { html5: 'browser_auto' },
 });
 
 export const defaultSettings = () => ({
@@ -72,33 +72,52 @@ export const defaultSettings = () => ({
 
 export const normalizePlaybackSettings = (value = {}) => {
   const input = value && typeof value === 'object' ? value : {};
-  const decoder = input.decoder && typeof input.decoder === 'object' ? input.decoder : {};
-  const order = Array.isArray(input.fallbackOrder) ? input.fallbackOrder.filter(item => ['exo', 'ijk', 'native'].includes(item)) : [];
-  const fallbackOrder = [...new Set([...order, 'ijk', 'exo', 'native'])].slice(0, 3);
-  const legacyMoviePlayer = ['exo', 'ijk', 'html5'].includes(input.moviePlayer) ? input.moviePlayer : 'ijk';
-  const legacyLivePlayer = ['exo', 'ijk', 'html5'].includes(input.livePlayer) ? input.livePlayer : 'ijk';
-  const movieDecoder = decoder[legacyMoviePlayer] === 'software' ? 'software' : 'hardware';
-  const liveDecoder = decoder[legacyLivePlayer] === 'software' ? 'software' : 'hardware';
-  const movieScheme = PLAYBACK_SCHEMES.some(scheme => scheme.id === input.moviePlaybackScheme)
-    ? getPlaybackScheme(input.moviePlaybackScheme)
-    : getPlaybackSchemeId(legacyMoviePlayer, movieDecoder);
-  const liveScheme = PLAYBACK_SCHEMES.some(scheme => scheme.id === input.livePlaybackScheme)
-    ? getPlaybackScheme(input.livePlaybackScheme)
-    : getPlaybackSchemeId(legacyLivePlayer, liveDecoder);
+  const requestedFallbackOrder = Array.isArray(input.fallbackOrder) ? input.fallbackOrder : [];
+  const fallbackOrder = [...new Set([
+    ...requestedFallbackOrder.filter(item => PLAYBACK_FALLBACK_ORDER.includes(item)),
+    ...PLAYBACK_FALLBACK_ORDER,
+  ])].slice(0, PLAYBACK_FALLBACK_ORDER.length);
+
+  const normalizeScheme = (schemeValue, legacyPlayer, legacyDecoder, scope) => {
+    const requested = String(schemeValue || '').trim().toLowerCase();
+    const valid = PLAYBACK_SCHEMES.find(scheme => scheme.id === requested);
+    if (valid) return valid;
+    if (/^exo_(hardware|software)$/.test(requested)) {
+      return getPlaybackScheme(scope === 'live' ? 'hls_lowlatency' : 'html5_auto');
+    }
+    const legacy = String(legacyPlayer || '').trim().toLowerCase();
+    if (legacy && legacy !== 'html5') {
+      return getPlaybackScheme(scope === 'live' ? 'hls_lowlatency' : 'html5_auto');
+    }
+    if (!requested && !legacy) {
+      return getPlaybackScheme(scope === 'live' ? 'hls_lowlatency' : 'html5_auto');
+    }
+    const normalizedId = getPlaybackSchemeId(legacy || 'html5', legacyDecoder || 'browser_auto');
+    return getPlaybackScheme(normalizedId);
+  };
+
+  const movieScheme = normalizeScheme(
+    input.moviePlaybackScheme,
+    input.moviePlayer,
+    input.decoder?.[input.moviePlayer],
+    'movie',
+  );
+  const liveScheme = normalizeScheme(
+    input.livePlaybackScheme,
+    input.livePlayer,
+    input.decoder?.[input.livePlayer],
+    'live',
+  );
   return {
     ...defaultPlaybackSettings(),
     ...input,
-    moviePlayer: movieScheme.engine,
-    livePlayer: liveScheme.engine,
+    moviePlayer: 'html5',
+    livePlayer: 'html5',
     moviePlaybackScheme: movieScheme.id,
     livePlaybackScheme: liveScheme.id,
     fallbackEnabled: input.fallbackEnabled !== false,
     fallbackOrder,
-    decoder: {
-      exo: decoder.exo === 'software' ? 'software' : 'hardware',
-      ijk: decoder.ijk === 'software' ? 'software' : 'hardware',
-      native: 'system',
-    },
+    decoder: { html5: 'browser_auto' },
   };
 };
 

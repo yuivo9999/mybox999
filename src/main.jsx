@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './app.css';
 import { AppRoot } from './App.jsx';
+import { startUiStateReporter } from './core__state__uiStateReporter.js';
 
 function renderBootError(error) {
   const message = error instanceof Error ? error.message : String(error);
@@ -35,6 +36,8 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
   renderBootError(event.reason);
 });
+
+startUiStateReporter();
 
 let isMounted = false;
 

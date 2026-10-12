@@ -192,8 +192,8 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
     const settings = persistentStateStore.getSnapshot()?.settings;
     const saved = settings?.playback?.livePlaybackScheme;
     const candidate = globalLiveCache.decoderEngine || saved;
-    const allowedAndroidSchemes = ['ijk_hardware'];
-    return allowedAndroidSchemes.includes(candidate) ? candidate : 'ijk_hardware';
+    const allowedAndroidSchemes = ['hls_lowlatency', 'html5_auto', 'html5_hardware', 'hls_worker'];
+    return allowedAndroidSchemes.includes(candidate) ? candidate : 'hls_lowlatency';
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -204,9 +204,8 @@ export function LiveFeature({ channels = [], sources = [], favorites = [], onCha
       // 竖屏沉浸页面不等于真正全屏；仅用户主动全屏后才使用沉浸播放路由。
       viewTier: isActualFullscreen ? VIEW_TIER.IMMERSIVE : VIEW_TIER.MAIN,
     });
-    const selectedEngine = runtimeEnv === RUNTIME_ENV.ANDROID && currentRoute.kind === MEDIA_KIND.LIVE
-      ? 'ijk_hardware'
-      : engineInput;
+    const supportedEngineIds = (currentRoute.engines || []).map(option => option.id);
+    const selectedEngine = supportedEngineIds.includes(engineInput) ? engineInput : currentRoute.defaultEngine;
     const resolved = resolveEngineSelection(selectedEngine, currentRoute);
     setDecoderEngine(selectedEngine);
     globalLiveCache.decoderEngine = selectedEngine;

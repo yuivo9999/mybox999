@@ -26,7 +26,7 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
     if (isWeb) return ['hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
       ? playback.livePlaybackScheme
       : 'hls_lowlatency';
-    return 'ijk_hardware';
+    return 'hls_lowlatency';
   });
   const [isImmersive, setIsImmersive] = useState(false);
   const [resolvedInput, setResolvedInput] = useState(null);
@@ -92,7 +92,7 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
       const resolved = resolveEngineSelection(engineInput, route);
       engine = resolved.engine;
       decoderMode = resolved.decoder;
-      selectedScheme = 'ijk_hardware';
+      selectedScheme = (route.engines || []).some(option => option.id === engineInput) ? engineInput : route.defaultEngine;
       resolvedHint = resolved.playerHint;
     } else {
       const scheme = getPlaybackScheme(engineInput);
@@ -136,10 +136,8 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
         const payload = event?.data ?? event?.decoder ?? {};
         const engine = String(payload?.engine ?? '').toLowerCase();
         const mode = String(payload?.mode ?? '').toLowerCase();
-        if (engine === 'exo' || engine === 'ijk') {
-          setDecoderEngine(engine + '_' + (mode === 'software' ? 'software' : 'hardware'));
-        } else if (engine === 'html5') {
-          setDecoderEngine(mode.includes('hard') ? 'html5_hardware' : 'hls_lowlatency');
+        if (engine === 'html5') {
+          setDecoderEngine(mode === 'hls_worker' || mode === 'hls_lowlatency' ? mode : (mode.includes('hard') ? 'html5_hardware' : 'html5_auto'));
         }
       },
       onResolvedInput: setResolvedInput,
@@ -156,7 +154,7 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
     const player = playbackController.attachPlayer(videoRef.current);
     if (!player) {
       setStatus('error');
-      setPlaybackError('Native 播放器不可用');
+      setPlaybackError('HTML5 视频元素不可用');
       return undefined;
     }
 

@@ -1,7 +1,6 @@
 import { PlaybackFailureCode, PlaybackKind } from './core__models__playback.js';
 import { parserService } from './core__parsers__parserService.js';
 import { createHtml5PlayerAdapter } from './core__player__html5PlayerAdapter.js';
-import { createAndroidLivePlayerAdapter } from './core__player__androidLivePlayerAdapter.js';
 import { PlayerState } from './core__player__playerInterface.js';
 import { createPlaybackEventBus } from './core__playback__playbackEventBus.js';
 import { createPlaybackStateMachine } from './core__playback__playbackStateMachine.js';
@@ -65,19 +64,13 @@ export function createPlaybackCore(task,hooks={}) {
   player?.release?.(); playerElement=element;
   if(element) {
    const isAndroidWebView = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
-   const isAndroidLive = isAndroidWebView && task.request.kind === PlaybackKind.LIVE;
-   if (isAndroidLive) {
-    // Android Live owns a separate adapter that can switch between dedicated
-    // IJK/Exo native sessions and the existing in-page HTML5/HLS path. VOD and
-    // all browser playback remain bound to the page-owned HTMLMediaElement.
-    player=createAndroidLivePlayerAdapter(element,{onEvent:handlePlayerEvent});
-   } else {
-    player=createHtml5PlayerAdapter(element,{
-     onEvent:handlePlayerEvent,
-     requireVideoFrame:isAndroidWebView,
-     allowMixedContent:isAndroidWebView,
-    });
-   }
+   // All media kinds and view modes use the same page-owned <video> element.
+   // Live HLS/TS handling remains in HLS.js/MPEG-TS.js, without native engines.
+   player=createHtml5PlayerAdapter(element,{
+    onEvent:handlePlayerEvent,
+    requireVideoFrame:isAndroidWebView,
+    allowMixedContent:isAndroidWebView,
+   });
   } else return null;
   return player;
  };
@@ -118,28 +111,24 @@ export function createPlaybackCore(task,hooks={}) {
   if(!player)throw new Error('PLAYER_ADAPTER_NOT_ATTACHED');
   if(!isOperationCurrent(epoch))return null;
   const playbackSettings = userDataService.getSettings().playback;
-  const isAndroidHost = typeof window !== 'undefined' && Boolean(window.TVBoxAndroidBridge);
-  const isAndroidLive = isAndroidHost && task.request.kind === PlaybackKind.LIVE;
-  const configuredLiveScheme = String(playbackSettings.livePlaybackScheme || 'ijk_hardware').toLowerCase();
-  const configuredLiveEngine = configuredLiveScheme.startsWith('exo_') ? 'exo' : configuredLiveScheme.startsWith('ijk_') ? 'ijk' : 'html5';
-  const configuredLiveDecoder = configuredLiveScheme.endsWith('_software') ? 'software' : (configuredLiveEngine === 'html5' ? 'browser_auto' : 'hardware');
-  const defaultEngine = isAndroidHost
-   ? (isAndroidLive ? configuredLiveEngine : 'html5')
-   : (task.request.kind === PlaybackKind.LIVE ? (playbackSettings.livePlayer || 'ijk') : (playbackSettings.moviePlayer || 'ijk'));
-  const requestedEngine = input.playerHint?.engine ?? defaultEngine;
-  const canUseDedicatedLiveEngine = isAndroidLive && ['ijk', 'exo'].includes(String(requestedEngine).toLowerCase());
-  const effectiveEngine = isAndroidHost && !canUseDedicatedLiveEngine ? 'html5' : requestedEngine;
-  const requestedDecoder = input.playerHint?.decoder ?? (
-   isAndroidLive && String(requestedEngine).toLowerCase() === configuredLiveEngine
-    ? configuredLiveDecoder
-    : (playbackSettings.decoder?.[requestedEngine] ?? 'hardware')
-  );
-  const effectiveDecoder = isAndroidHost && !canUseDedicatedLiveEngine ? 'browser_auto' : requestedDecoder;
+  const savedScheme = String(
+   task.request.kind === PlaybackKind.LIVE
+    ? (playbackSettings.livePlaybackScheme || 'hls_lowlatency')
+    : (playbackSettings.moviePlaybackScheme || 'html5_auto')
+  ).toLowerCase();
+  const allowedModes = new Set(['auto', 'native_hardware', 'hls_worker', 'hls_lowlatency']);
+  const schemeMode = savedScheme === 'hls_worker' ? 'hls_worker'
+   : savedScheme === 'hls_lowlatency' ? 'hls_lowlatency'
+   : savedScheme === 'html5_hardware' ? 'native_hardware'
+   : 'auto';
+  const requestedMode = String(input.playerHint?.webMode || input.playerHint?.mode || schemeMode).toLowerCase();
+  const webMode = allowedModes.has(requestedMode) ? requestedMode : 'auto';
   const playerHint = {
    ...(input.playerHint ?? {}),
-   engine: effectiveEngine,
-   decoder: effectiveDecoder,
-   nativeLivePlayer: Boolean(canUseDedicatedLiveEngine),
+   engine: 'html5',
+   decoder: 'browser_auto',
+   webMode,
+   nativeLivePlayer: false,
    decoderModes: input.playerHint?.decoderModes ?? playbackSettings.decoder ?? {},
    fallbackEnabled: input.playerHint?.fallbackEnabled ?? playbackSettings.fallbackEnabled,
    fallbackOrder: input.playerHint?.fallbackOrder ?? playbackSettings.fallbackOrder,
@@ -150,12 +139,6 @@ export function createPlaybackCore(task,hooks={}) {
    vodBufferMaxSeconds: task.request.kind === PlaybackKind.VOD
     ? Number(input.playerHint?.vodBufferMaxSeconds ?? VOD_BUFFER_MAX_SECONDS)
     : undefined,
-   ijkProfiles: input.playerHint?.ijkProfiles ?? input.metadata?.tvboxIJKProfiles ?? {},
-   ijkProfile: input.playerHint?.ijkProfile ?? (
-    (input.playerHint?.decoder ?? playbackSettings.decoder?.ijk ?? 'auto') === 'software' ? '软解码' :
-    (input.playerHint?.decoder ?? playbackSettings.decoder?.ijk ?? 'auto') === 'hardware' ? '硬解码' :
-    undefined
-   ),
   };
   await Promise.resolve(player.load({ ...input, playerHint }));
   if(!isOperationCurrent(epoch))return null;

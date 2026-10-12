@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  ArrowLeft, Plus, RefreshCw, Layers, CheckSquare, Square, 
-  Trash2, Edit3, Eye, Shield, Globe, Download, Upload, AlertCircle, Check, X, FileText
+import {
+  ArrowLeft, Plus, RefreshCw, Layers, CheckSquare, Square,
+  Trash2, Edit3, Eye, Shield, Globe, Download, AlertCircle, Check, X, FileText
 } from 'lucide-react';
 import { multiRepoService } from './repositoryManagement.js';
 import { toPunycodeUrl } from '../core__utils__punycode.js';
@@ -198,322 +198,271 @@ export function MultiRepoManager({
   };
 
   return (
-    <div className="modal-backdrop batch-source-backdrop" role="dialog" aria-modal="true" aria-label="多仓与单仓聚合工作台">
-      <div className="batch-source-modal multi-repo-modal" style={{ width: 'min(860px, calc(100vw - 20px))', maxHeight: '92vh' }}>
-        {/* Breadcrumb Header */}
-        <div className="batch-source-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border, #303744)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button className="icon-button" onClick={onBack} title="返回源管理" aria-label="返回">
-              <ArrowLeft size={18} />
+    <div className="modal-backdrop batch-source-backdrop multi-repo-backdrop" role="dialog" aria-modal="true" aria-label="多仓与单仓聚合工作台">
+      <div className="batch-source-modal multi-repo-modal">
+        <header className="multi-repo-header">
+          <div className="multi-repo-heading-group">
+            <button className="multi-repo-back-button" onClick={onBack} title="返回源管理" aria-label="返回源管理">
+              <ArrowLeft size={19} />
             </button>
-            <div className="breadcrumb-nav">
-              <span style={{ fontSize: 11, color: '#8f9aaa', letterSpacing: '0.08em' }}>源管理 / </span>
-              <h3 style={{ margin: 0, fontSize: 18, color: '#f3f4f6', display: 'inline' }}>多仓管理与单仓聚合工作台</h3>
+            <div className="multi-repo-heading-mark"><Layers size={21} /></div>
+            <div className="multi-repo-heading-copy">
+              <div className="multi-repo-breadcrumb">源管理 <span>/</span> 多仓管理</div>
+              <h2>多仓聚合中心</h2>
+              <p>统一维护订阅源、执行同步，并生成可供播放系统使用的聚合配置。</p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="secondary" onClick={openAddModal} style={{ padding: '8px 12px', fontSize: 12 }}>
-              <Plus size={15} /> 添加/导入多仓
+          <div className="multi-repo-header-actions">
+            <button className="multi-repo-add-button" onClick={openAddModal}>
+              <Plus size={17} /> <span>添加多仓</span>
             </button>
-            <button className="icon-button" onClick={onBack} title="关闭" aria-label="关闭">
-              ✕
+            <button className="multi-repo-close-button" onClick={onBack} title="关闭" aria-label="关闭">
+              <X size={19} />
             </button>
           </div>
-        </div>
+        </header>
 
-        <div style={{ padding: '16px 18px', overflowY: 'auto', flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Top Aggregation Workbench Dashboard */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9))',
-            border: '1px solid #334155', borderRadius: 16, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Layers size={22} color="#38bdf8" />
-                <div>
-                  <b style={{ fontSize: 16, color: '#f8fafc' }}>单仓聚合控制台</b>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                    聚合状态: 已选 <b>{selectedRepoIds.length}</b> / {repos.length} 仓 ·
-                    聚合站点: <b style={{ color: '#38bdf8' }}>{aggregatedResult?.meta?.siteCount || 0}</b> 个 ·
-                    直播源: <b style={{ color: '#4ade80' }}>{aggregatedResult?.meta?.liveCount || 0}</b> 个
-                  </div>
+        <div className="multi-repo-scroll">
+          <section className="multi-repo-overview" aria-labelledby="multi-repo-overview-title">
+            <div className="multi-repo-overview-top">
+              <div className="multi-repo-overview-copy">
+                <div className="multi-repo-eyebrow"><span className="multi-repo-live-dot" /> SOURCE WORKSPACE</div>
+                <h3 id="multi-repo-overview-title">把多个仓源，整理成一个入口</h3>
+                <p>选择需要参与聚合的仓源，然后同步、合并并应用到当前播放系统。</p>
+              </div>
+              <div className="multi-repo-stat-grid">
+                <div className="multi-repo-stat">
+                  <span>已配置仓源</span>
+                  <strong>{repos.length}</strong>
+                  <small>个订阅源</small>
+                </div>
+                <div className="multi-repo-stat is-selected">
+                  <span>参与本次聚合</span>
+                  <strong>{selectedRepoIds.length}</strong>
+                  <small>个已选仓源</small>
+                </div>
+                <div className="multi-repo-stat">
+                  <span>影视站点</span>
+                  <strong>{aggregatedResult?.meta?.siteCount || 0}</strong>
+                  <small>个已合并站点</small>
+                </div>
+                <div className="multi-repo-stat">
+                  <span>直播源</span>
+                  <strong>{aggregatedResult?.meta?.liveCount || 0}</strong>
+                  <small>个频道集合</small>
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="secondary" onClick={handleSyncAll} disabled={isSyncingAll} style={{ padding: '8px 14px', fontSize: 12 }}>
-                  <RefreshCw size={14} className={isSyncingAll ? 'spin' : ''} />
-                  {isSyncingAll ? '全部同步中…' : '一键同步全部多仓'}
-                </button>
-                <button className="secondary" onClick={handleRunAggregation} style={{ padding: '8px 14px', fontSize: 12 }}>
-                  <Layers size={14} /> 立即聚合
-                </button>
-                <button className="primary" onClick={handleApplyToSystem} style={{ padding: '8px 16px', fontSize: 12 }}>
-                  <Check size={14} /> 应用到当前播放源
-                </button>
-                <button className="secondary" onClick={handleExportAggregated} style={{ padding: '8px 12px', fontSize: 12 }}>
-                  <Download size={14} /> 导出单仓JSON
-                </button>
-              </div>
             </div>
 
-            {/* 5 Core Feature Pillars */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8,
-              padding: '10px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, fontSize: 11
-            }}>
-              <div style={{ color: '#93c5fd' }}>
-                <b style={{ display: 'block', color: '#60a5fa' }}>① 中文转 Punycode</b>
-                饭太硬.com → xn--sss604efuw
-              </div>
-              <div style={{ color: '#86efac' }}>
-                <b style={{ display: 'block', color: '#4ade80' }}>② 多地址回退</b>
-                主/备地址顺序尝试防断流
-              </div>
-              <div style={{ color: '#fde047' }}>
-                <b style={{ display: 'block', color: '#facc15' }}>③ 智能重试</b>
-                瞬态退避 · 4xx/5xx跳过
-              </div>
-              <div style={{ color: '#f472b6' }}>
-                <b style={{ display: 'block', color: '#ec4899' }}>④ 反爬兼容</b>
-                简洁UA · 剔除//注释与控制符
-              </div>
-              <div style={{ color: '#c084fc' }}>
-                <b style={{ display: 'block', color: '#a855f7' }}>⑤ 聚合单仓</b>
-                Sites按Key去重+冲突加仓前缀
-              </div>
+            <div className="multi-repo-primary-actions">
+              <button className="multi-repo-action-button is-sync" onClick={handleSyncAll} disabled={isSyncingAll}>
+                <span className="multi-repo-action-icon"><RefreshCw size={17} className={isSyncingAll ? 'spin' : ''} /></span>
+                <span><b>{isSyncingAll ? '正在同步全部仓源…' : '一键同步全部'}</b><small>拉取最新配置与站点</small></span>
+              </button>
+              <button className="multi-repo-action-button" onClick={handleRunAggregation}>
+                <span className="multi-repo-action-icon"><Layers size={17} /></span>
+                <span><b>生成聚合单仓</b><small>合并已选仓源</small></span>
+              </button>
+              <button className="multi-repo-action-button is-apply" onClick={handleApplyToSystem}>
+                <span className="multi-repo-action-icon"><Check size={17} /></span>
+                <span><b>应用到播放系统</b><small>启用当前聚合结果</small></span>
+              </button>
+              <button className="multi-repo-action-button is-export" onClick={handleExportAggregated}>
+                <span className="multi-repo-action-icon"><Download size={17} /></span>
+                <span><b>导出 JSON</b><small>保存聚合配置</small></span>
+              </button>
             </div>
-          </div>
+          </section>
+
+          <section className="multi-repo-capabilities" aria-label="多仓处理能力">
+            <div className="multi-repo-capability">
+              <span className="multi-repo-capability-icon"><Globe size={17} /></span>
+              <span><b>中文域名转换</b><small>自动处理 Punycode</small></span>
+            </div>
+            <div className="multi-repo-capability">
+              <span className="multi-repo-capability-icon"><Shield size={17} /></span>
+              <span><b>主备地址回退</b><small>按顺序尝试可用地址</small></span>
+            </div>
+            <div className="multi-repo-capability">
+              <span className="multi-repo-capability-icon"><RefreshCw size={17} /></span>
+              <span><b>失败重试</b><small>降低临时连接故障影响</small></span>
+            </div>
+            <div className="multi-repo-capability">
+              <span className="multi-repo-capability-icon"><Layers size={17} /></span>
+              <span><b>重复项合并</b><small>处理站点 Key 冲突</small></span>
+            </div>
+          </section>
 
           {notice && (
-            <div className="batch-source-notice" style={{ margin: 0 }}>
-              {notice}
+            <div className="multi-repo-notice" role="status" aria-live="polite">
+              <span className="multi-repo-notice-icon"><AlertCircle size={17} /></span>
+              <span>{notice}</span>
+              <button onClick={() => setNotice('')} title="关闭提示" aria-label="关闭提示"><X size={16} /></button>
             </div>
           )}
 
-          {/* Repositories List Toolbar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button className="secondary" onClick={toggleSelectAll} style={{ padding: '6px 12px', fontSize: 12 }}>
-                {selectedRepoIds.length === repos.length ? '取消全选' : '全选所有仓'}
-              </button>
-              <button className="secondary" onClick={handleRestoreDefaults} style={{ padding: '6px 12px', fontSize: 12 }}>
-                恢复内置精品仓
-              </button>
+          <section className="multi-repo-repository-section" aria-labelledby="multi-repo-list-title">
+            <div className="multi-repo-list-heading">
+              <div>
+                <div className="multi-repo-section-eyebrow">YOUR SOURCES</div>
+                <h3 id="multi-repo-list-title">仓源列表 <span>{repos.length}</span></h3>
+                <p>勾选需要参与聚合的仓源；每个仓源可单独同步、编辑或查看详情。</p>
+              </div>
+              <div className="multi-repo-list-tools">
+                <button className="multi-repo-tool-button" onClick={toggleSelectAll}>
+                  {selectedRepoIds.length === repos.length && repos.length > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
+                  {selectedRepoIds.length === repos.length && repos.length > 0 ? '取消全选' : '全选仓源'}
+                </button>
+                <button className="multi-repo-tool-button" onClick={handleRestoreDefaults}>
+                  <RefreshCw size={15} /> 恢复预置仓
+                </button>
+              </div>
             </div>
-            <small style={{ color: '#8f9aaa' }}>
-              点击“检视穿透”可查看单仓的所有站点详情与多地址探测日志
-            </small>
-          </div>
 
-          {/* Repositories Cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {repos.map((repo) => {
-              const isSelected = selectedRepoIds.includes(repo.id);
-              const isSyncing = syncingMap[repo.id];
-              const backupsCount = (repo.backupUrls || []).length;
+            {repos.length === 0 ? (
+              <div className="multi-repo-empty-state">
+                <div className="multi-repo-empty-icon"><Globe size={25} /></div>
+                <h4>还没有添加仓源</h4>
+                <p>添加一个订阅地址，或导入多行文本 / TVBox JSON 配置。</p>
+                <button className="multi-repo-add-button" onClick={openAddModal}><Plus size={16} /> 添加第一个仓源</button>
+              </div>
+            ) : (
+              <div className="multi-repo-list">
+                {repos.map((repo) => {
+                  const isSelected = selectedRepoIds.includes(repo.id);
+                  const isSyncing = Boolean(syncingMap[repo.id]);
+                  const backupsCount = (repo.backupUrls || []).length;
+                  const status = repo.status || 'idle';
+                  const statusLabel = status === 'success' ? '已就绪' : status === 'syncing' ? '同步中' : status === 'error' ? '同步失败' : '未同步';
 
-              return (
-                <div
-                  key={repo.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px', background: 'var(--card-bg, #171b23)', border: '1px solid var(--border, #303744)',
-                    borderRadius: 14, gap: 12, flexWrap: 'wrap',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                    <button
-                      className="batch-source-check"
-                      onClick={() => toggleSelectRepo(repo.id)}
-                      title={isSelected ? '取消勾选参与聚合' : '勾选参与聚合'}
-                      style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-                    >
-                      {isSelected ? <CheckSquare size={20} color="#38bdf8" /> : <Square size={20} color="#64748b" />}
-                    </button>
-
-                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <b style={{ fontSize: 15, color: '#f1f5f9' }}>{repo.name}</b>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600,
-                          background: repo.status === 'success' ? 'rgba(34,197,94,0.15)' : repo.status === 'syncing' ? 'rgba(56,189,248,0.15)' : repo.status === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.12)',
-                          color: repo.status === 'success' ? '#4ade80' : repo.status === 'syncing' ? '#38bdf8' : repo.status === 'error' ? '#f87171' : '#94a3b8',
-                        }}>
-                          {repo.status === 'success' ? '已就绪' : repo.status === 'syncing' ? '同步中' : repo.status === 'error' ? '同步失败' : '未同步'}
-                        </span>
-                        {backupsCount > 0 && (
-                          <span style={{ fontSize: 11, color: '#a78bfa' }}>
-                            (含 {backupsCount} 个备用镜像)
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ fontSize: 11, color: '#8f9aaa', wordBreak: 'break-all' }}>
-                        <span>主地址: </span>
-                        <code style={{ color: '#cbd5e1' }}>{repo.primaryUrl}</code>
-                      </div>
-
-                      {repo.status === 'success' && (
-                        <div style={{ fontSize: 11, color: '#64748b', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          <span>站点: <b style={{ color: '#cbd5e1' }}>{repo.siteCount}</b></span>
-                          <span>直播: <b style={{ color: '#cbd5e1' }}>{repo.liveCount}</b></span>
-                          {repo.durationMs && <span>耗时: {repo.durationMs}ms</span>}
-                          {repo.usedUrl && <span>命中: <code style={{ color: '#38bdf8' }}>{repo.usedUrl}</code></span>}
+                  return (
+                    <article key={repo.id} className={`multi-repo-card${isSelected ? ' is-selected' : ''}`}>
+                      <div className="multi-repo-card-main">
+                        <button
+                          className={`multi-repo-select-button${isSelected ? ' is-checked' : ''}`}
+                          onClick={() => toggleSelectRepo(repo.id)}
+                          title={isSelected ? '取消参与聚合' : '勾选参与聚合'}
+                          aria-label={`${isSelected ? '取消选择' : '选择'}仓源 ${repo.name}`}
+                          aria-pressed={isSelected}
+                        >
+                          {isSelected ? <CheckSquare size={21} /> : <Square size={21} />}
+                        </button>
+                        <div className="multi-repo-provider-icon"><Globe size={20} /></div>
+                        <div className="multi-repo-card-info">
+                          <div className="multi-repo-card-title-row">
+                            <h4>{repo.name}</h4>
+                            <span className={`multi-repo-status is-${status}`}>
+                              <span className="multi-repo-status-dot" />{statusLabel}
+                            </span>
+                            {backupsCount > 0 && <span className="multi-repo-backup-badge">备用地址 {backupsCount}</span>}
+                          </div>
+                          <div className="multi-repo-address-block">
+                            <span className="multi-repo-field-label">主地址</span>
+                            <code>{repo.primaryUrl || '尚未设置主地址'}</code>
+                          </div>
+                          {status === 'success' && (
+                            <div className="multi-repo-result-meta">
+                              <span><b>{repo.siteCount || 0}</b> 个影视站点</span>
+                              <span><b>{repo.liveCount || 0}</b> 个直播源</span>
+                              {repo.durationMs ? <span>耗时 <b>{repo.durationMs} ms</b></span> : null}
+                            </div>
+                          )}
+                          {repo.usedUrl && status === 'success' && (
+                            <div className="multi-repo-used-url"><Check size={13} /> 本次命中：<code>{repo.usedUrl}</code></div>
+                          )}
+                          {repo.errorMessage && (
+                            <div className="multi-repo-error-message"><AlertCircle size={14} /> <span>{repo.errorMessage}</span></div>
+                          )}
                         </div>
-                      )}
+                      </div>
 
-                      {repo.errorMessage && (
-                        <small style={{ color: '#f87171' }}>{repo.errorMessage}</small>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions for this repo */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      className="primary"
-                      onClick={() => onSelectRepoDetail(repo)}
-                      style={{ padding: '7px 12px', fontSize: 12 }}
-                      title="进入第三界面穿透检视站点"
-                    >
-                      <Eye size={14} /> 检视穿透
-                    </button>
-                    <button
-                      className="secondary"
-                      onClick={() => handleSyncSingle(repo.id)}
-                      disabled={isSyncing}
-                      style={{ padding: '7px 12px', fontSize: 12 }}
-                      title="重新拉取主/备地址"
-                    >
-                      <RefreshCw size={14} className={isSyncing ? 'spin' : ''} />
-                      {isSyncing ? '同步中' : '同步'}
-                    </button>
-                    <button
-                      className="icon-button"
-                      onClick={() => openEditModal(repo)}
-                      title="编辑地址"
-                      style={{ padding: 8 }}
-                    >
-                      <Edit3 size={15} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      onClick={() => setConfirmDeleteId(repo.id)}
-                      title="删除此仓"
-                      style={{ padding: 8, color: '#f87171' }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <div className="multi-repo-card-actions">
+                        <button className="multi-repo-detail-button" onClick={() => onSelectRepoDetail(repo)} title="查看该仓的站点详情与地址探测日志">
+                          <Eye size={15} /> <span>查看详情</span>
+                        </button>
+                        <button className="multi-repo-secondary-action" onClick={() => handleSyncSingle(repo.id)} disabled={isSyncing} title="重新拉取主地址与备用地址">
+                          <RefreshCw size={15} className={isSyncing ? 'spin' : ''} /> <span>{isSyncing ? '同步中' : '同步'}</span>
+                        </button>
+                        <button className="multi-repo-icon-action" onClick={() => openEditModal(repo)} title="编辑地址" aria-label={`编辑 ${repo.name}`}>
+                          <Edit3 size={16} />
+                        </button>
+                        <button className="multi-repo-icon-action is-danger" onClick={() => setConfirmDeleteId(repo.id)} title="删除此仓" aria-label={`删除 ${repo.name}`}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
-        {/* Add/Edit Modal */}
         {showAddModal && (
-          <div className="modal-backdrop" style={{ zIndex: 90 }}>
-            <div className="modal" style={{ width: 'min(500px, 95vw)', gap: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <b style={{ fontSize: 16 }}>{editingRepo ? '编辑多仓源' : '添加多仓订阅'}</b>
-                <button className="icon-button" onClick={() => setShowAddModal(false)}>✕</button>
+          <div className="modal-backdrop multi-repo-nested-backdrop" role="dialog" aria-modal="true" aria-label={editingRepo ? '编辑多仓源' : '添加多仓订阅'}>
+            <div className="modal multi-repo-form-modal">
+              <div className="multi-repo-form-header">
+                <div className="multi-repo-form-title-icon"><Plus size={18} /></div>
+                <div><h3>{editingRepo ? '编辑仓源' : '添加 / 导入仓源'}</h3><p>配置主地址与备用地址，保障订阅可用性。</p></div>
+                <button className="multi-repo-close-button" onClick={() => setShowAddModal(false)} title="关闭" aria-label="关闭"><X size={18} /></button>
               </div>
 
               {!editingRepo && (
-                <div className="seg" style={{ margin: 0 }}>
-                  <button className={activeFormTab === 'single' ? 'active' : ''} onClick={() => setActiveFormTab('single')}>单仓配置</button>
-                  <button className={activeFormTab === 'batch' ? 'active' : ''} onClick={() => setActiveFormTab('batch')}>批量订阅文本/JSON</button>
+                <div className="multi-repo-form-tabs" role="tablist" aria-label="添加方式">
+                  <button className={activeFormTab === 'single' ? 'active' : ''} onClick={() => setActiveFormTab('single')} role="tab" aria-selected={activeFormTab === 'single'}>
+                    <Globe size={15} /> 单个仓源
+                  </button>
+                  <button className={activeFormTab === 'batch' ? 'active' : ''} onClick={() => setActiveFormTab('batch')} role="tab" aria-selected={activeFormTab === 'batch'}>
+                    <FileText size={15} /> 批量文本 / JSON
+                  </button>
                 </div>
               )}
 
               {activeFormTab === 'single' ? (
-                <>
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8f9aaa', display: 'block', marginBottom: 4 }}>多仓名称</label>
-                    <input
-                      type="text"
-                      placeholder="例如：饭太硬 / 肥猫 / 巧技"
-                      value={formName}
-                      onChange={e => setFormName(e.target.value)}
-                    />
+                <div className="multi-repo-form-fields">
+                  <div className="multi-repo-form-field">
+                    <label htmlFor="multi-repo-name">仓源名称 <span>可选</span></label>
+                    <input id="multi-repo-name" className="multi-repo-input" type="text" placeholder="例如：饭太硬 / 肥猫 / 巧技" value={formName} onChange={e => setFormName(e.target.value)} />
                   </div>
-
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8f9aaa', display: 'block', marginBottom: 4 }}>
-                      主地址 (支持中文域名，将自动转为 Punycode)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="http://饭太硬.com/tv"
-                      value={formPrimaryUrl}
-                      onChange={e => setFormPrimaryUrl(e.target.value)}
-                    />
-                    {formPrimaryUrl && (
-                      <small style={{ color: '#a78bfa', display: 'block', marginTop: 4, wordBreak: 'break-all' }}>
-                        Punycode 预览: {toPunycodeUrl(formPrimaryUrl)}
-                      </small>
-                    )}
+                  <div className="multi-repo-form-field">
+                    <label htmlFor="multi-repo-primary-url">主订阅地址</label>
+                    <input id="multi-repo-primary-url" className="multi-repo-input" type="text" placeholder="https://example.com/tv.json" value={formPrimaryUrl} onChange={e => setFormPrimaryUrl(e.target.value)} />
+                    <small>支持中文域名，保存时会自动处理 Punycode。</small>
+                    {formPrimaryUrl && <div className="multi-repo-punycode-preview"><span>转换预览</span><code>{toPunycodeUrl(formPrimaryUrl)}</code></div>}
                   </div>
-
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8f9aaa', display: 'block', marginBottom: 4 }}>
-                      备用镜像地址列表 (每行一个，主地址失败时顺序回退尝试)
-                    </label>
-                    <textarea
-                      rows={3}
-                      style={{
-                        width: '100%', boxSizing: 'border-box', background: 'var(--card-bg, #171b23)',
-                        color: '#fff', border: '1px solid var(--border, #303744)', borderRadius: 10, padding: 10,
-                        fontSize: 12, fontFamily: 'inherit',
-                      }}
-                      placeholder="http://xn--sss604efuw.com/tv&#10;https://www.ftytv.com/tv"
-                      value={formBackupUrls}
-                      onChange={e => setFormBackupUrls(e.target.value)}
-                    />
+                  <div className="multi-repo-form-field">
+                    <label htmlFor="multi-repo-backup-urls">备用地址 <span>可选</span></label>
+                    <textarea id="multi-repo-backup-urls" className="multi-repo-textarea" rows={3} placeholder={'每行填写一个备用地址\nhttps://backup.example.com/tv.json'} value={formBackupUrls} onChange={e => setFormBackupUrls(e.target.value)} />
+                    <small>主地址不可用时，系统会按填写顺序依次尝试。</small>
                   </div>
-                </>
+                </div>
               ) : (
-                <div>
-                  <label style={{ fontSize: 12, color: '#8f9aaa', display: 'block', marginBottom: 4 }}>
-                    粘贴多仓订阅内容 (支持 TVBox urls JSON 或 仓名,地址 多行文本)
-                  </label>
-                  <textarea
-                    rows={6}
-                    style={{
-                      width: '100%', boxSizing: 'border-box', background: 'var(--card-bg, #171b23)',
-                      color: '#fff', border: '1px solid var(--border, #303744)', borderRadius: 10, padding: 10,
-                      fontSize: 12, fontFamily: 'inherit',
-                    }}
-                    placeholder={`{"urls": [{"url": "http://饭太硬.com/tv", "name": "饭太硬"}]}&#10;或&#10;肥猫,http://肥猫.com/tv`}
-                    value={batchImportText}
-                    onChange={e => setBatchImportText(e.target.value)}
-                  />
+                <div className="multi-repo-form-fields">
+                  <div className="multi-repo-form-field">
+                    <label htmlFor="multi-repo-batch-text">粘贴订阅内容</label>
+                    <textarea id="multi-repo-batch-text" className="multi-repo-textarea multi-repo-batch-textarea" rows={7} placeholder={'支持 TVBox urls JSON，或“仓名,地址”多行文本\n\n肥猫,https://example.com/tv.json\n巧技,https://example.org/tv.json'} value={batchImportText} onChange={e => setBatchImportText(e.target.value)} />
+                    <small>支持 TVBox `urls` JSON 结构和逐行“仓名,地址”格式。</small>
+                  </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
-                <button className="secondary" onClick={() => setShowAddModal(false)}>取消</button>
-                <button className="primary" onClick={handleSaveRepo}>保存并启用</button>
+              <div className="multi-repo-form-footer">
+                <button className="multi-repo-tool-button" onClick={() => setShowAddModal(false)}>取消</button>
+                <button className="multi-repo-save-button" onClick={handleSaveRepo}><Check size={16} /> 保存配置</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Delete Confirmation */}
         {confirmDeleteId && (
-          <div className="modal-backdrop" style={{ zIndex: 90 }}>
-            <div className="modal">
-              <b>确认删除此多仓？</b>
-              <p style={{ fontSize: 13, color: '#8f9aaa', margin: 0 }}>
-                删除后将不再拉取该多仓，但已聚合至当前系统的站点不会受到影响。
-              </p>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button className="secondary" onClick={() => setConfirmDeleteId(null)}>取消</button>
-                <button className="primary" style={{ background: '#ef4444', color: '#fff' }} onClick={() => handleDeleteRepo(confirmDeleteId)}>
-                  确认删除
-                </button>
+          <div className="modal-backdrop multi-repo-nested-backdrop" role="dialog" aria-modal="true" aria-label="确认删除仓源">
+            <div className="modal multi-repo-confirm-modal">
+              <div className="multi-repo-confirm-icon"><Trash2 size={21} /></div>
+              <h3>确认删除这个仓源？</h3>
+              <p>删除后将停止拉取该仓源。已经合并到当前播放系统的站点不会因此被立即移除。</p>
+              <div className="multi-repo-form-footer">
+                <button className="multi-repo-tool-button" onClick={() => setConfirmDeleteId(null)}>保留仓源</button>
+                <button className="multi-repo-delete-button" onClick={() => handleDeleteRepo(confirmDeleteId)}><Trash2 size={15} /> 确认删除</button>
               </div>
             </div>
           </div>

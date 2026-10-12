@@ -86,7 +86,7 @@ export function SangtianPlayerWindow({
   onFullscreen, terminalTag = 'BASH', children, videoContainerRef, isLive = false,
   playbackRate = 1.0, onChangePlaybackRate,
   channels = [], activeChannel = null, activeStreamIndex = 0, onSelectChannel, onSwitchStreamIndex,
-  decoderEngine = 'ijk_hardware', onChangeDecoderEngine,
+  decoderEngine = 'hls_lowlatency', onChangeDecoderEngine,
   isImmersive = false, onToggleImmersive, onActualFullscreenChange, onRegisterImmersiveBackHandler, onTab,
   title = '', episodeLabel = '', sourceLabel = '', currentProgram = '',
   episodes = [], currentEpisodeIndex = 0, onSelectEpisode,
@@ -1280,11 +1280,10 @@ export function SangtianPlayerWindow({
     viewTier: currentTier,
   });
   const routeEngineOptions = currentRouteConfig?.engines?.length ? currentRouteConfig.engines : [
-    { id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', badge: '默认' },
+    { id: 'hls_lowlatency', name: 'HTML5 + HLS.js 低延迟直播', engine: 'html5', decoder: 'browser_auto', mode: 'hls_lowlatency', badge: '默认' },
   ];
   const normalizedDecoderEngine = String(decoderEngine || '').toLowerCase();
   const routeEngineMatch = routeEngineOptions.find(engine => String(engine.id).toLowerCase() === normalizedDecoderEngine)
-    || (normalizedDecoderEngine === 'ijk' ? routeEngineOptions.find(engine => engine.engine === 'ijk') : null)
     || (normalizedDecoderEngine.includes('hls') ? routeEngineOptions.find(engine => engine.mode === normalizedDecoderEngine || engine.id === normalizedDecoderEngine) : null)
     || (normalizedDecoderEngine.includes('hardware') ? routeEngineOptions.find(engine => engine.mode === 'native_hardware' || String(engine.id).includes('hardware')) : null);
   const selectedRouteEngineId = routeEngineMatch?.id
@@ -2297,21 +2296,20 @@ export function SangtianPlayerWindow({
                             {runtimeEnv === RUNTIME_ENV.WEB
                               ? '普通手机浏览器使用 HLS.js 与 HTML5 原生媒体路径；播放画面由当前页面的视频元素承载，具体能力受浏览器与源站跨域策略限制。'
                               : isLive
-                                ? 'Android Live 统一使用独立 IJKPlayer 原生播放实例与硬件解码；网页端继续使用浏览器的 HTML5 / HLS 播放路径。播放器画面会跟随当前直播窗口同步。'
-                                : 'Android 影视点播继续由当前页面内的 HTML 视频元素承载实际画面，不使用 Live 专用 IJK / ExoPlayer 播放器。'}
+                                ? 'Android Live 与影视点播统一使用当前页面内的 HTML5 video；HLS.js/MSE 或浏览器原生媒体负责播放，不创建独立原生视频表面。'
+                                : 'Android 影视点播由当前页面内的 HTML5 video 承载画面；不使用独立原生播放器。'}
                           </p>
                         </div>
 
                         <div className="settings-btn-grid vertical">
                           {(() => {
                             const enginesList = currentRouteConfig?.engines || (runtimeEnv === RUNTIME_ENV.ANDROID
-                              ? (isLive
-                                ? [{ id: 'ijk_hardware', name: 'IJKPlayer 硬解', engine: 'ijk', decoder: 'hardware', badge: '默认' }]
-                                : [
-                                    { id: 'html5_auto', name: 'HTML5 自动适配（内嵌播放器）' },
-                                    { id: 'hls_worker', name: 'HLS.js / MSE 播放' },
-                                    { id: 'html5_hardware', name: 'HTML5 原生媒体优先' },
-                                  ])
+                              ? [
+                                  { id: 'hls_lowlatency', name: 'HTML5 + HLS.js 低延迟直播', badge: '默认' },
+                                  { id: 'html5_auto', name: 'HTML5 自动适配' },
+                                  { id: 'hls_worker', name: 'HLS.js / MSE 播放' },
+                                  { id: 'html5_hardware', name: 'HTML5 原生媒体优先' },
+                                ]
                               : [
                                   { id: 'hls_lowlatency', name: 'HLS.js 低延迟直播' },
                                   { id: 'html5_hardware', name: 'HTML5 原生媒体优先' },
@@ -2323,10 +2321,6 @@ export function SangtianPlayerWindow({
                             let exactActiveId = '';
                             if (enginesList.some(e => e.id === rawEngine)) {
                               exactActiveId = rawEngine;
-                            } else if (rawEngine.includes('exo')) {
-                              exactActiveId = rawEngine.includes('soft') ? 'exo_software' : 'exo_hardware';
-                            } else if (rawEngine.includes('ijk')) {
-                              exactActiveId = rawEngine.includes('soft') ? 'ijk_software' : 'ijk_hardware';
                             } else if (rawEngine === 'html5_auto') {
                               exactActiveId = 'html5_auto';
                             } else if (rawEngine.includes('html5') || rawEngine.includes('hls')) {
@@ -2575,7 +2569,7 @@ export function SangtianPlayerWindow({
                 {runtimeEnv !== RUNTIME_ENV.WEB && (
                   <button type="button" className="live-immersive-action-card" onClick={() => setImmersiveMenu('config')}>
                     <span className="live-immersive-action-icon"><Settings size={20} /></span>
-                    <span><strong>直播配置</strong><small>{runtimeEnv === RUNTIME_ENV.ANDROID && isLive ? 'IJKPlayer 硬解' : String(decoderEngine || '').toLowerCase().includes('exo') ? 'ExoPlayer' : String(decoderEngine || '').toLowerCase().includes('ijk') ? 'IJKPlayer' : '当前播放内核'}</small></span>
+                    <span><strong>直播配置</strong><small>{String(decoderEngine || '').toLowerCase().includes('hls') ? 'HTML5 + HLS.js' : 'HTML5 媒体路径'}</small></span>
                     <ChevronRight size={17} />
                   </button>
                 )}
@@ -2633,7 +2627,7 @@ export function SangtianPlayerWindow({
                     <span className="live-immersive-option-icon"><Settings size={17} /></span><span className="live-immersive-option-copy"><strong>{engine.name}</strong><small>{description}</small></span>{selected && <Check size={19} />}
                   </button>;
                 })}
-                <p className="live-immersive-sheet-note">可选项随设备和浏览器能力变化；Android Live 按项目策略仅提供 IJKPlayer 硬解。</p>
+                <p className="live-immersive-sheet-note">所有选项都由页面内 HTML5 video 播放；HLS.js/MSE 与浏览器原生媒体路径会按所选模式调整尝试顺序。</p>
               </div>
             )}
 

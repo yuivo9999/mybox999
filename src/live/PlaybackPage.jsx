@@ -52,9 +52,9 @@ function PlaybackView({
       return allowedWebSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'hls_lowlatency' : 'hls_worker');
     }
     const allowedAndroidSchemes = isLive
-      ? ['ijk_hardware']
+      ? ['hls_lowlatency', 'html5_auto', 'hls_worker', 'html5_hardware']
       : ['html5_auto', 'hls_worker', 'html5_hardware'];
-    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'ijk_hardware' : 'html5_auto');
+    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'hls_lowlatency' : 'html5_auto');
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -74,9 +74,9 @@ function PlaybackView({
       const resolved = resolveEngineSelection(engineInput, currentRoute);
       engine = resolved.engine;
       decoderMode = resolved.decoder;
-      selectedScheme = isLive
-        ? 'ijk_hardware'
-        : (['html5_auto', 'hls_worker', 'html5_hardware'].includes(engineInput) ? engineInput : 'html5_auto');
+      selectedScheme = (currentRoute.engines || []).some(option => option.id === engineInput)
+        ? engineInput
+        : currentRoute.defaultEngine;
       resolvedHint = resolved.playerHint;
     } else {
       // Keep the ordinary mobile browser's existing scheme mapping unchanged.
@@ -188,10 +188,10 @@ function PlaybackView({
         const payload = event?.data ?? event?.decoder ?? {};
         const engine = String(payload?.engine ?? '').toLowerCase();
         const mode = String(payload?.mode ?? '').toLowerCase();
-        if (engine === 'exo' || engine === 'ijk') {
-          setDecoderEngine(engine + '_' + (mode === 'software' ? 'software' : 'hardware'));
-        } else if (engine === 'html5') {
-          setDecoderEngine(mode.includes('hard') ? 'html5_hardware' : (isLive ? 'hls_lowlatency' : 'hls_worker'));
+        if (engine === 'html5') {
+          setDecoderEngine(mode === 'hls_worker' || mode === 'hls_lowlatency'
+            ? mode
+            : (mode.includes('hard') || mode === 'native_hardware' ? 'html5_hardware' : (isLive ? 'hls_lowlatency' : 'html5_auto')));
         }
       }
 
