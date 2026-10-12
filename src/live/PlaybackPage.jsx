@@ -12,7 +12,7 @@ import {
 } from '../shared__components__theme__SangtianPlayerConsole.jsx';
 import { PlaybackPagePlayerBlock } from './PlayerBlocks.jsx';
 import { getPlaybackScheme } from '../core__models__userData.js';
-import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection, normalizeAndroidLivePlaybackScheme } from '../core__playback__playbackStrategyDispatcher.js';
+import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection } from '../core__playback__playbackStrategyDispatcher.js';
 
 
 function PlaybackView({
@@ -52,11 +52,9 @@ function PlaybackView({
       return allowedWebSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'hls_lowlatency' : 'hls_worker');
     }
     const allowedAndroidSchemes = isLive
-      ? ['ijk_hardware', 'html5_auto', 'hls_lowlatency', 'html5_hardware']
+      ? ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software', 'html5_auto', 'hls_lowlatency', 'html5_hardware']
       : ['html5_auto', 'hls_worker', 'html5_hardware'];
-    return isLive
-      ? normalizeAndroidLivePlaybackScheme(savedScheme)
-      : (allowedAndroidSchemes.includes(savedScheme) ? savedScheme : 'html5_auto');
+    return allowedAndroidSchemes.includes(savedScheme) ? savedScheme : (isLive ? 'ijk_hardware' : 'html5_auto');
   });
 
   const handleSwitchDecoderEngine = async (engineInput) => {
@@ -73,17 +71,14 @@ function PlaybackView({
     let resolvedHint = {};
 
     if (runtimeEnv === RUNTIME_ENV.ANDROID) {
-      const selectedInput = isLive ? normalizeAndroidLivePlaybackScheme(engineInput) : engineInput;
-      const resolved = resolveEngineSelection(selectedInput, currentRoute);
+      const resolved = resolveEngineSelection(engineInput, currentRoute);
       engine = resolved.engine;
       decoderMode = resolved.decoder;
-      if (isLive) {
-        selectedScheme = selectedInput;
-      } else {
-        selectedScheme = ['html5_auto', 'hls_worker', 'html5_hardware'].includes(engineInput)
-          ? engineInput
-          : 'html5_auto';
-      }
+      const allowedLiveNativeSchemes = ['ijk_hardware', 'ijk_software', 'exo_hardware', 'exo_software'];
+      selectedScheme = (isLive && allowedLiveNativeSchemes.includes(engineInput))
+        || ['html5_auto', 'hls_worker', 'hls_lowlatency', 'html5_hardware'].includes(engineInput)
+        ? engineInput
+        : (isLive ? 'ijk_hardware' : 'html5_auto');
       resolvedHint = resolved.playerHint;
     } else {
       // Keep the ordinary mobile browser's existing scheme mapping unchanged.

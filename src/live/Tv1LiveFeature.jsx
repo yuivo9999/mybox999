@@ -7,7 +7,7 @@ import { requestManager } from '../core__services__network__requestManager.js';
 import { SmartImage, EmptyState, LoadingState, ErrorState } from '../shared__components__StateViews.jsx';
 import { Tv1LivePlayerBlock } from './PlayerBlocks.jsx';
 import { getPlaybackScheme } from '../core__models__userData.js';
-import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection, normalizeAndroidLivePlaybackScheme } from '../core__playback__playbackStrategyDispatcher.js';
+import { detectRuntimeEnv, RUNTIME_ENV, MEDIA_KIND, VIEW_TIER, getPlaybackRouteConfig, resolveEngineSelection } from '../core__playback__playbackStrategyDispatcher.js';
 
 
 export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFavorite, onBack }) {
@@ -26,7 +26,9 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
     if (isWeb) return ['hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
       ? playback.livePlaybackScheme
       : 'hls_lowlatency';
-    return normalizeAndroidLivePlaybackScheme(playback.livePlaybackScheme);
+    return ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(playback.livePlaybackScheme)
+      ? playback.livePlaybackScheme
+      : 'html5_auto';
   });
   const [isImmersive, setIsImmersive] = useState(false);
   const [resolvedInput, setResolvedInput] = useState(null);
@@ -89,10 +91,10 @@ export function Tv1LiveFeature({ sources = [], favorites = [], onPlay, toggleFav
     let resolvedHint = {};
     if (runtimeEnv === RUNTIME_ENV.ANDROID) {
       const route = getPlaybackRouteConfig({ runtime: runtimeEnv, kind: MEDIA_KIND.LIVE, viewTier: VIEW_TIER.MAIN });
-      selectedScheme = normalizeAndroidLivePlaybackScheme(engineInput);
-      const resolved = resolveEngineSelection(selectedScheme, route);
+      const resolved = resolveEngineSelection(engineInput, route);
       engine = resolved.engine;
       decoderMode = resolved.decoder;
+      selectedScheme = ['html5_auto', 'hls_lowlatency', 'html5_hardware'].includes(engineInput) ? engineInput : 'html5_auto';
       resolvedHint = resolved.playerHint;
     } else {
       const scheme = getPlaybackScheme(engineInput);

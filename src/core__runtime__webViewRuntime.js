@@ -64,12 +64,8 @@ export const webViewRuntime = {
     }
   },
 
-  async setFullscreen(enabled, orientation = 'landscape') {
-    const allowedOrientations = new Set(['landscape', 'portrait', 'sensor']);
-    const requestedOrientation = allowedOrientations.has(String(orientation).toLowerCase())
-      ? String(orientation).toLowerCase()
-      : 'landscape';
-    const bridgeResult = this.call('setFullscreen', { enabled: Boolean(enabled), orientation: requestedOrientation });
+  async setFullscreen(enabled) {
+    const bridgeResult = this.call('setFullscreen', { enabled: Boolean(enabled) });
     if (bridgeResult.ok) return bridgeResult;
 
     if (typeof document === 'undefined') return bridgeResult;

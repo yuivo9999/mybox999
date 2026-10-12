@@ -46,8 +46,6 @@ public final class NativePlaybackBridge {
     private boolean nativeFullscreenActive = false;
     private int previousSystemUiVisibility = 0;
     private int previousRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
-    // Preserve the previous landscape-first behavior for VOD; Live can opt into full sensor orientation.
-    private int fullscreenRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
 
     public NativePlaybackBridge(Activity activity, WebView webView) {
         this.activity = activity;
@@ -71,40 +69,22 @@ public final class NativePlaybackBridge {
 
     /**
      * Enter Android native immersive fullscreen for the page-owned DOM player.
-     * The WebView still renders the video; callers can request landscape-first
-     * (the VOD default), portrait, or full sensor orientation (used by Live).
+     * The WebView still renders the video; only Activity system bars and screen
+     * orientation are controlled here.
      */
     @JavascriptInterface
     public String setFullscreen(String payload) {
         if (released) return error("PLAYER_RELEASED");
         final boolean enabled;
-        final int requestedOrientation;
         try {
             JSONObject request = new JSONObject(payload == null ? "{}" : payload);
             if (!request.has("enabled")) return error("FULLSCREEN_STATE_REQUIRED");
             enabled = request.optBoolean("enabled", false);
-            String orientation = request.optString("orientation", "landscape").trim().toLowerCase();
-            switch (orientation) {
-                case "landscape":
-                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
-                    break;
-                case "portrait":
-                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
-                    break;
-                case "sensor":
-                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR;
-                    break;
-                default:
-                    return error("UNSUPPORTED_FULLSCREEN_ORIENTATION");
-            }
         } catch (Exception ignored) {
             return error("INVALID_FULLSCREEN_ARGUMENT");
         }
 
-        activity.runOnUiThread(() -> {
-            if (enabled) fullscreenRequestedOrientation = requestedOrientation;
-            applyNativeFullscreen(enabled);
-        });
+        activity.runOnUiThread(() -> applyNativeFullscreen(enabled));
         return "{\"ok\":true,\"enabled\":" + enabled + "}";
     }
 
@@ -157,7 +137,7 @@ public final class NativePlaybackBridge {
                 nativeFullscreenActive = true;
             }
             try {
-                activity.setRequestedOrientation(fullscreenRequestedOrientation);
+                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             } catch (Exception ignored) {}
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
