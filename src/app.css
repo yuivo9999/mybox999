@@ -4480,3 +4480,70 @@ html.android-live-native-active #root,
   .sangtian-window.is-live-direct .live-fullscreen-actions-row { overflow-x: auto; overflow-y: hidden; }
   .sangtian-window.is-live-direct .live-playback-nav.is-fullscreen { top: calc(max(8px, env(safe-area-inset-top, 0px)) + 96px); }
 }
+
+/* Landscape fullscreen Live: consolidate all controls into one compact playback row. */
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen {
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 4px 5px;
+  min-height: 38px;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-playback-nav-title {
+  display: none;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-playback-nav-actions {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-playback-nav-actions::-webkit-scrollbar {
+  display: none;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-playback-nav-btn {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 32px;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-fullscreen-nav-setting-btn.active {
+  color: #ffe0a1;
+  border-color: rgba(213, 165, 90, .72);
+  background: rgba(213, 165, 90, .17);
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-fullscreen-nav-volume-control {
+  flex: 0 0 auto;
+  min-width: 80px;
+  min-height: 32px;
+  gap: 4px;
+  padding: 0 6px;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-fullscreen-nav-volume-control input {
+  width: 44px;
+  height: 22px;
+}
+.sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-fullscreen-lock-control {
+  min-width: 34px;
+  padding: 0 7px !important;
+}
+@media (orientation: landscape) and (max-height: 430px) {
+  .sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen {
+    top: max(6px, env(safe-area-inset-top, 0px));
+    min-height: 36px;
+  }
+  .sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-playback-nav-btn,
+  .sangtian-window.is-live-direct.is-landscape .live-playback-nav.is-fullscreen .live-fullscreen-nav-volume-control {
+    min-height: 30px;
+  }
+}

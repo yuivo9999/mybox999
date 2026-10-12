@@ -647,6 +647,7 @@ export function SangtianPlayerWindow({
   // Live 的竖屏沉浸是完整页面；只有真正的系统/网页全屏才使用全屏覆盖控制。
   const immersiveLivePage = Boolean(isLive && isImmersive && !isSystemFullscreen && !isWebFullscreen);
   const fullscreen = isSystemFullscreen || isWebFullscreen || (isImmersive && !isLive);
+  const isLandscapeLiveFullscreen = Boolean(fullscreen && isLive && isLandscape);
   const isEmbeddedLivePlayer = isLive && !fullscreen && !immersiveLivePage;
   const embeddedLiveCanvasStyle = (() => {
     const width = Number(playerBodySize.width);
@@ -1601,11 +1602,85 @@ export function SangtianPlayerWindow({
                   else handleEmbeddedBlankClick(event);
                 }}
               >
-                <span className="live-playback-nav-title">播放导航</span>
+                {!isLandscapeLiveFullscreen && <span className="live-playback-nav-title">播放导航</span>}
                 <div className="live-playback-nav-actions">
+                  {isLandscapeLiveFullscreen && (
+                    <>
+                      <button
+                        type="button"
+                        className={`live-playback-nav-btn live-fullscreen-nav-setting-btn ${immersiveMenu === 'config' ? 'active' : ''}`}
+                        onClick={event => { event.stopPropagation(); openFullscreenLiveMiniMenu('config'); }}
+                        aria-expanded={immersiveMenu === 'config'}
+                        title="播放配置"
+                      >
+                        <SlidersHorizontal size={14} />
+                        <span>播放配置</span>
+                      </button>
+                      {availableStreams.length > 1 && (
+                        <button
+                          type="button"
+                          className={`live-playback-nav-btn live-fullscreen-nav-setting-btn ${immersiveMenu === 'lines' ? 'active' : ''}`}
+                          onClick={event => { event.stopPropagation(); openFullscreenLiveMiniMenu('lines'); }}
+                          aria-expanded={immersiveMenu === 'lines'}
+                          title="线路"
+                        >
+                          <GitBranch size={14} />
+                          <span>线路</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`live-playback-nav-btn live-fullscreen-nav-setting-btn ${showMiniAspectPicker ? 'active' : ''}`}
+                        onClick={event => { event.stopPropagation(); toggleFullscreenMiniAspectPicker(); }}
+                        aria-expanded={showMiniAspectPicker}
+                        title="比例"
+                      >
+                        <Ratio size={14} />
+                        <span>比例</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`live-playback-nav-btn live-fullscreen-mute-control ${isMuted ? 'active' : ''}`}
+                        onClick={event => { event.stopPropagation(); void handleToggleMute(); resetLivePlaybackNavTimeout(); }}
+                        aria-pressed={isMuted}
+                        aria-label={isMuted ? '取消静音' : '静音'}
+                        title={isMuted ? '取消静音' : '静音'}
+                      >
+                        {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                        <span>{isMuted ? '取消静音' : '静音'}</span>
+                      </button>
+                      <label
+                        className="live-fullscreen-volume-control live-fullscreen-nav-volume-control"
+                        title={`音量 ${Math.round(volumeLevel * 100)}%`}
+                        onClick={event => event.stopPropagation()}
+                        onPointerDown={event => { event.stopPropagation(); resetLivePlaybackNavTimeout(); }}
+                      >
+                        {isMuted || volumeLevel <= 0 ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={isMuted ? 0 : volumeLevel}
+                          onChange={event => { void applyPlayerVolume(event.currentTarget.value); }}
+                          aria-label="音量"
+                          aria-valuetext={`${Math.round(volumeLevel * 100)}%`}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="live-playback-nav-btn live-fullscreen-lock-control"
+                        onClick={event => { event.stopPropagation(); setShowLeftSidebar(false); setShowRightSidebar(false); setShowEpisodeSidebar(false); setImmersiveMenu(null); setShowMiniAspectPicker(false); setShowFullscreenBar(false); setShowUnlockHint(false); setIsLocked(true); }}
+                        title="锁定屏幕控制"
+                        aria-label="锁定屏幕控制"
+                      >
+                        <Lock size={14} />
+                      </button>
+                    </>
+                  )}
                   {!immersiveLivePage && (
                     <>
-                  <button
+                  {!isLandscapeLiveFullscreen && <button
                     type="button"
                     className="live-playback-nav-btn"
                     onClick={event => {
@@ -1631,7 +1706,7 @@ export function SangtianPlayerWindow({
                   >
                     <Play size={14} fill="currentColor" />
                     <span>播放</span>
-                  </button>
+                  </button>}
                   <button
                     type="button"
                     className="live-playback-nav-btn"
@@ -1844,7 +1919,8 @@ export function SangtianPlayerWindow({
                 {showFullscreenBar && isPlaying && !showLeftSidebar && !showRightSidebar && !showEpisodeSidebar && (
                   <div key={controlHideProgressKey} className="sangtian-control-hide-countdown" aria-label="无操作 15 秒后自动隐藏控制栏" />
                 )}
-                {/* Fullscreen Top Bar: Live controls are kept above the playback navigation. */}
+                {/* Landscape Live puts all compact controls into the playback navigation row. */}
+                {!(isLive && isLandscape) && (
                 <div className={`sangtian-fullscreen-topbar ${isLive ? 'is-live-fullscreen-topbar' : ''}`}>
                   {isLive ? (
                     <>
@@ -2002,6 +2078,7 @@ export function SangtianPlayerWindow({
                     </>
                   )}
                 </div>
+                )}
 
                 {/* 顶部栏下面一行：横屏、铺满、退出 */}
                 {!isLive && (
@@ -2539,7 +2616,7 @@ export function SangtianPlayerWindow({
           <section className={`live-immersive-menu-sheet ${immersiveMenu === 'channels' ? 'is-channel-picker' : ''} ${fullscreen && isLive ? 'is-fullscreen-live-mini' : ''}`} role="dialog" aria-modal="true" tabIndex={-1} aria-label={immersiveMenu === 'config' ? '播放配置' : immersiveMenu === 'lines' ? '线路选择' : '选台'} onClick={event => event.stopPropagation()}>
             <div className="live-immersive-sheet-grabber" />
             <div className="live-immersive-sheet-heading">
-              <div><strong>{immersiveMenu === 'config' ? '播放配置' : immersiveMenu === 'lines' ? '线路选择' : '选择频道'}</strong><small>{immersiveMenu === 'config' ? '选择当前播放环境支持的播放器路径' : immersiveMenu === 'lines' ? '只切换当前频道的播放线路' : '搜索频道名称，或按频道组别筛选'}</small></div>
+              <div><strong>{immersiveMenu === 'config' ? '播放配置' : immersiveMenu === 'lines' ? '线路选择' : '选择频道'}</strong>{!(isLandscapeLiveFullscreen && immersiveMenu === 'channels') && <small>{immersiveMenu === 'config' ? '选择当前播放环境支持的播放器路径' : immersiveMenu === 'lines' ? '只切换当前频道的播放线路' : '搜索频道名称，或按频道组别筛选'}</small>}</div>
               <button ref={menuCloseButtonRef} type="button" onClick={() => setImmersiveMenu(null)} aria-label="关闭菜单"><X size={20} /></button>
             </div>
 
@@ -2575,7 +2652,7 @@ export function SangtianPlayerWindow({
 
             {immersiveMenu === 'channels' && (
               <div className="live-immersive-channel-picker">
-                <label className="live-immersive-channel-search"><Search size={17} /><input ref={channelSearchInputRef} type="search" value={sidebarSearch} onChange={event => setSidebarSearch(event.target.value)} placeholder="搜索频道名称" aria-label="搜索频道名称" />{sidebarSearch && <button type="button" onClick={() => setSidebarSearch('')} aria-label="清除搜索">清除</button>}</label>
+                {!isLandscapeLiveFullscreen && <label className="live-immersive-channel-search"><Search size={17} /><input ref={channelSearchInputRef} type="search" value={sidebarSearch} onChange={event => setSidebarSearch(event.target.value)} placeholder="搜索频道名称" aria-label="搜索频道名称" />{sidebarSearch && <button type="button" onClick={() => setSidebarSearch('')} aria-label="清除搜索">清除</button>}</label>}
                 <div className="live-immersive-category-label">频道组别</div>
                 <div className="live-immersive-categories" aria-label="频道组别">{sidebarCategories.map(category => <button type="button" key={category} className={selectedSidebarCat === category ? 'active' : ''} onClick={() => setSelectedSidebarCat(category)}>{category}</button>)}</div>
                 <div className="live-immersive-menu-list channel-list">
