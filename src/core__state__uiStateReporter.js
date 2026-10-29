@@ -179,7 +179,7 @@ function makeSnapshot() {
 }
 
 function emit() {
-  const value = getSnapshot();
+  const value = getMyBoxUIState();
   listeners.forEach(listener => {
     try { listener(value); } catch { /* External observers must not interrupt state reporting. */ }
   });
